@@ -12,7 +12,7 @@ const BookingSection = () => (
       href="https://calendly.com"
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center justify-between w-full px-5 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity glow-amber-sm"
+      className="flex items-center justify-between w-full px-6 py-5 rounded-2xl bg-primary text-primary-foreground font-bold text-base hover:opacity-90 transition-opacity glow-amber"
     >
       <span className="flex items-center gap-3">
         <Calendar className="w-5 h-5" />

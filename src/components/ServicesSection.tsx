@@ -39,7 +39,7 @@ const ServicesSection = () => (
     transition={{ delay: 0.7, duration: 0.5 }}
     className="px-6 pb-6"
   >
-    <h2 className="text-lg font-display font-bold text-foreground mb-4">
+    <h2 className="text-2xl font-display font-bold text-foreground mb-5">
       Services & Pricing
     </h2>
     <div className="space-y-3">
@@ -56,12 +56,12 @@ const ServicesSection = () => (
               <Icon className="w-4 h-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+              <h3 className="text-base font-semibold text-foreground">{title}</h3>
+              <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
             </div>
             <div className="text-right flex-shrink-0">
-              <span className="text-sm font-bold text-primary">{price}</span>
-              <p className="text-[10px] text-muted-foreground">{per}</p>
+              <span className="text-lg font-bold text-primary">{price}</span>
+              <p className="text-xs text-muted-foreground">{per}</p>
             </div>
           </div>
         </motion.div>
