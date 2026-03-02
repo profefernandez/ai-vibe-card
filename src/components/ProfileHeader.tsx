@@ -42,7 +42,7 @@ const ProfileHeader = () => {
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.5 }}
-        className="w-28 h-28 rounded-full overflow-hidden glow-amber animate-pulse-glow mb-4 border-2 border-primary/30"
+        className="w-36 h-36 rounded-full overflow-hidden glow-amber animate-pulse-glow mb-5 border-2 border-primary/30"
       >
         <img
           src={profilePhoto}
@@ -51,16 +51,16 @@ const ProfileHeader = () => {
         />
       </motion.div>
 
-      <h1 className="text-2xl font-display font-bold text-gradient-amber">
+      <h1 className="text-4xl font-display font-black text-gradient-amber tracking-tight">
         Tanya Williams
       </h1>
-      <p className="text-sm text-muted-foreground mt-1 tracking-wide uppercase">
+      <p className="text-base text-muted-foreground mt-2 tracking-widest uppercase font-medium">
         Founder & AI Consultant
       </p>
-      <p className="text-primary font-display text-lg mt-2 font-semibold">
+      <p className="text-primary font-display text-2xl mt-3 font-bold">
         60 Watts of Clarity
       </p>
-      <p className="text-xs text-muted-foreground mt-2 text-center max-w-xs leading-relaxed">
+      <p className="text-sm text-muted-foreground mt-3 text-center max-w-xs leading-relaxed">
         No-code AI agent training for social work professionals. Grounded in the NASW Code of Ethics.
       </p>
     </motion.section>

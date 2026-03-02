@@ -82,7 +82,7 @@ const AiChatAgent = () => {
             <Zap className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="text-base font-display font-bold text-foreground">
+          <h2 className="text-xl font-display font-bold text-foreground">
               Ask <span className="text-gradient-amber">Watts</span>
             </h2>
             <div className="flex items-center gap-1.5">
@@ -104,7 +104,7 @@ const AiChatAgent = () => {
               <button
                 key={prompt}
                 onClick={() => handleSend(prompt)}
-                className="text-[11px] px-3 py-1.5 rounded-full border border-primary/20 text-primary/80 hover:bg-primary/10 hover:text-primary transition-all duration-200"
+                className="text-sm px-4 py-2 rounded-full border border-primary/20 text-primary/80 hover:bg-primary/10 hover:text-primary transition-all duration-200 font-medium"
               >
                 {prompt}
               </button>
