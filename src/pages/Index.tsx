@@ -1,12 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import ProfileHeader from "@/components/ProfileHeader";
+import SocialLinks from "@/components/SocialLinks";
+import BookingSection from "@/components/BookingSection";
+import ServicesSection from "@/components/ServicesSection";
+import AiChatAgent from "@/components/AiChatAgent";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-gradient-dark flex justify-center">
+      <div className="w-full max-w-md">
+        <ProfileHeader />
+        <SocialLinks />
+        <BookingSection />
+        <ServicesSection />
+
+        <footer className="px-6 py-8 text-center">
+          <p className="text-[10px] text-muted-foreground">
+            © 2026 60 Watts of Clarity. All rights reserved.
+          </p>
+        </footer>
       </div>
+
+      <AiChatAgent />
     </div>
   );
 };
