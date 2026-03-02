@@ -92,6 +92,15 @@
   }
 }
 
+/* Hide horizontal scrollbar for snap scroll */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 4px;
