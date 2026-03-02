@@ -1,50 +1,46 @@
 import ProfileHeader from "@/components/ProfileHeader";
-import SocialLinks from "@/components/SocialLinks";
-import BookingSection from "@/components/BookingSection";
+import LinkButtons from "@/components/LinkButtons";
 import ServicesSection from "@/components/ServicesSection";
 import AiChatAgent from "@/components/AiChatAgent";
+import { motion } from "framer-motion";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-gradient-dark">
-      {/* Horizontal scrolling container on mobile, grid on desktop */}
-      <div className="flex flex-row overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 lg:overflow-visible lg:min-h-screen">
+    <div className="min-h-screen bg-gradient-dark flex justify-center">
+      <div className="w-full max-w-md mx-auto px-4 py-8 space-y-6">
+        <ProfileHeader />
+        <LinkButtons />
+        <ServicesSection />
         
-        {/* Panel 1: Profile & Social */}
-        <section className="min-w-[100vw] snap-center flex flex-col justify-center px-2 py-6 lg:min-w-0 lg:border-r lg:border-border/30">
-          <div className="max-w-md mx-auto w-full">
-            <ProfileHeader />
-            <SocialLinks />
-            <BookingSection />
-          </div>
-        </section>
+        {/* Divider */}
+        <div className="flex items-center gap-3 px-2">
+          <div className="flex-1 h-px bg-border/50" />
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            className="text-xs text-muted-foreground uppercase tracking-widest"
+          >
+            Ask Watts AI
+          </motion.span>
+          <div className="flex-1 h-px bg-border/50" />
+        </div>
 
-        {/* Panel 2: Services */}
-        <section className="min-w-[100vw] snap-center flex flex-col justify-center px-2 py-6 lg:min-w-0 lg:border-r lg:border-border/30">
-          <div className="max-w-md mx-auto w-full">
-            <ServicesSection />
-          </div>
-        </section>
-
-        {/* Panel 3: AI Chat - fully integrated */}
-        <section className="min-w-[100vw] snap-center flex flex-col h-screen lg:min-w-0 lg:h-auto lg:min-h-screen">
+        {/* Inline AI Chat */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.1, duration: 0.5 }}
+          className="rounded-3xl border border-border/50 overflow-hidden bg-gradient-card"
+          style={{ minHeight: 420 }}
+        >
           <AiChatAgent />
-        </section>
-      </div>
+        </motion.div>
 
-      {/* Swipe indicator on mobile */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 lg:hidden z-40 pointer-events-none">
-        <SwipeDots />
+        <p className="text-center text-[10px] text-muted-foreground/40 pb-4">
+          © 2026 60 Watts of Clarity
+        </p>
       </div>
-    </div>
-  );
-};
-
-const SwipeDots = () => {
-  return (
-    <div className="flex gap-1.5 bg-card/80 backdrop-blur-sm rounded-full px-3 py-1.5 border border-border/30">
-      <span className="text-[10px] text-muted-foreground tracking-wider uppercase">Swipe</span>
-      <span className="text-[10px] text-primary">→</span>
     </div>
   );
 };

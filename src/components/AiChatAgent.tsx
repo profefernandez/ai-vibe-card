@@ -17,10 +17,10 @@ const getAiResponse = (userMessage: string): string => {
     return "We offer four core services:\n\n1. **AI Literacy Workshop** — Learn the foundations of AI for social work\n2. **AI Agent Build** — Get a custom no-code AI agent built for your practice\n3. **Team Training** — A 6-week cohort program for organizations\n4. **VIP Strategy Day** — Full-day intensive planning session\n\nAll grounded in the NASW Code of Ethics. Want to learn more about any specific service?";
   }
   if (msg.includes("book") || msg.includes("call") || msg.includes("meeting") || msg.includes("schedule")) {
-    return "You can book a **free discovery call** by swiping left to the first panel and tapping the gold button. We'd love to chat about how AI can transform your social work practice. 📅";
+    return "You can book a **free discovery call** by tapping the gold button at the top of the page. We'd love to chat about how AI can transform your social work practice. 📅";
   }
   if (msg.includes("contact") || msg.includes("email") || msg.includes("phone") || msg.includes("reach")) {
-    return "You can reach us at:\n\n📧 **hello@60wattsofclarity.com**\n📱 Via the social links on the first panel\n📅 Or book a free discovery call directly!\n\nWe typically respond within 24 hours.";
+    return "You can reach us at:\n\n📧 **hello@60wattsofclarity.com**\n📱 Via the social links above\n📅 Or book a free discovery call directly!\n\nWe typically respond within 24 hours.";
   }
   if (msg.includes("who") || msg.includes("tanya") || msg.includes("founder") || msg.includes("about")) {
     return "**Tanya Williams** is the founder of 60 Watts of Clarity. She specializes in no-code AI agent training for social work professionals, helping them leverage AI tools ethically and effectively. Her framework — Learn AI Literacy → Build AI Agents → Deploy AI Agents — is grounded in the NASW Code of Ethics and backed by 90+ research sources.";
@@ -43,7 +43,7 @@ const AiChatAgent = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Welcome to 60 Watts of Clarity! ✨ I'm your AI guide. Ask me anything about our services, pricing, or how we help social work professionals harness AI ethically.",
+      content: "Hey! ✨ I'm Watts, your AI guide. Ask me anything about our services, pricing, or how we help social workers harness AI ethically.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -71,18 +71,15 @@ const AiChatAgent = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-dark">
-      {/* Custom chat header with branding */}
-      <div className="relative px-6 pt-8 pb-4">
-        {/* Decorative glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-primary/8 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative flex items-center gap-3 mb-3">
+    <div className="flex flex-col h-full" style={{ minHeight: 420 }}>
+      {/* Header */}
+      <div className="px-5 pt-5 pb-3">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary/15 border border-primary/20 flex items-center justify-center">
             <Zap className="w-5 h-5 text-primary" />
           </div>
           <div>
-          <h2 className="text-xl font-display font-bold text-foreground">
+            <h2 className="text-lg font-display font-bold text-foreground">
               Ask <span className="text-gradient-amber">Watts</span>
             </h2>
             <div className="flex items-center gap-1.5">
@@ -92,19 +89,19 @@ const AiChatAgent = () => {
           </div>
         </div>
 
-        {/* Quick prompts - only show when few messages */}
+        {/* Quick prompts */}
         {messages.length <= 2 && (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex flex-wrap gap-2 mt-3"
+            className="flex flex-wrap gap-1.5 mt-3"
           >
             {QUICK_PROMPTS.map((prompt) => (
               <button
                 key={prompt}
                 onClick={() => handleSend(prompt)}
-                className="text-sm px-4 py-2 rounded-full border border-primary/20 text-primary/80 hover:bg-primary/10 hover:text-primary transition-all duration-200 font-medium"
+                className="text-xs px-3 py-1.5 rounded-full border border-primary/20 text-primary/80 hover:bg-primary/10 hover:text-primary transition-all duration-200 font-medium"
               >
                 {prompt}
               </button>
@@ -113,20 +110,20 @@ const AiChatAgent = () => {
         )}
       </div>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 space-y-3">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="w-7 h-7 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0 mr-2 mt-1">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <div className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0 mr-2 mt-1">
+                  <Sparkles className="w-3 h-3 text-primary" />
                 </div>
               )}
               <div
@@ -137,7 +134,7 @@ const AiChatAgent = () => {
                 }`}
               >
                 {msg.content.split("\n").map((line, j) => (
-                  <p key={j} className={j > 0 ? "mt-1.5" : ""}>
+                  <p key={j} className={j > 0 ? "mt-1" : ""}>
                     {line.split(/(\*\*.*?\*\*)/).map((part, k) =>
                       part.startsWith("**") && part.endsWith("**") ? (
                         <strong key={k} className="font-semibold">{part.slice(2, -2)}</strong>
@@ -153,31 +150,20 @@ const AiChatAgent = () => {
         </AnimatePresence>
 
         {isTyping && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex items-start"
-          >
-            <div className="w-7 h-7 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0 mr-2">
-              <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-start">
+            <div className="w-6 h-6 rounded-lg bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0 mr-2">
+              <Sparkles className="w-3 h-3 text-primary animate-pulse" />
             </div>
-            <div className="bg-secondary/70 backdrop-blur-sm rounded-2xl rounded-tl-md px-4 py-3.5 border border-border/30">
-              <div className="flex gap-1.5 items-center">
-                <motion.span
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0 }}
-                  className="w-1.5 h-1.5 rounded-full bg-primary/60"
-                />
-                <motion.span
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0.2 }}
-                  className="w-1.5 h-1.5 rounded-full bg-primary/60"
-                />
-                <motion.span
-                  animate={{ scale: [1, 1.3, 1] }}
-                  transition={{ repeat: Infinity, duration: 0.8, delay: 0.4 }}
-                  className="w-1.5 h-1.5 rounded-full bg-primary/60"
-                />
+            <div className="bg-secondary/70 rounded-2xl rounded-tl-md px-4 py-3 border border-border/30">
+              <div className="flex gap-1 items-center">
+                {[0, 0.15, 0.3].map((delay) => (
+                  <motion.span
+                    key={delay}
+                    animate={{ scale: [1, 1.4, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.7, delay }}
+                    className="w-1.5 h-1.5 rounded-full bg-primary/50"
+                  />
+                ))}
               </div>
             </div>
           </motion.div>
@@ -185,32 +171,26 @@ const AiChatAgent = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Custom input area */}
-      <div className="px-4 pb-6 pt-3">
+      {/* Input */}
+      <div className="px-4 pb-4 pt-2">
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSend();
-          }}
+          onSubmit={(e) => { e.preventDefault(); handleSend(); }}
           className="relative flex items-center"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your question..."
-            className="w-full bg-secondary/60 backdrop-blur-sm rounded-2xl pl-5 pr-14 py-3.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 border border-border/30 transition-all"
+            className="w-full bg-secondary/60 rounded-2xl pl-4 pr-12 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 border border-border/30 transition-all"
           />
           <button
             type="submit"
             disabled={!input.trim()}
-            className="absolute right-2 w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
+            className="absolute right-2 w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-3.5 h-3.5" />
           </button>
         </form>
-        <p className="text-center text-[9px] text-muted-foreground/50 mt-2">
-          Powered by 60 Watts of Clarity AI
-        </p>
       </div>
     </div>
   );
