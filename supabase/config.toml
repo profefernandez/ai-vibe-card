@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.query-content]
 verify_jwt = false
+
+[functions.test-api-connection]
+verify_jwt = false
