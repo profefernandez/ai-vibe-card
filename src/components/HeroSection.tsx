@@ -9,7 +9,7 @@ interface HeroSectionProps {
 
 const HeroSection = ({ onAskWatts }: HeroSectionProps) => {
   return (
-    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-6">
+    <section className="min-h-[100dvh] flex flex-col items-center justify-start pt-16 px-6">
       {/* Brand name */}
       <motion.h1
         initial={{ opacity: 0, y: -15 }}
@@ -60,25 +60,25 @@ const HeroSection = ({ onAskWatts }: HeroSectionProps) => {
         <SocialLinks />
       </motion.div>
 
-      {/* Dual CTAs */}
+      {/* CTAs stacked: Book a Call on top, Ask Watts below */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6, duration: 0.5 }}
-        className="flex gap-3 mt-8"
+        className="flex flex-col items-center gap-3 mt-8 w-full max-w-xs"
       >
         <a
           href="https://calendly.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
+          className="flex items-center justify-center gap-2 w-full px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
         >
           <Calendar className="w-4 h-4" />
           Book a Call
         </a>
         <button
           onClick={onAskWatts}
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
+          className="flex items-center justify-center gap-2 w-full px-6 py-3 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
         >
           <Sparkles className="w-4 h-4" />
           Ask Watts
