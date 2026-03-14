@@ -24,15 +24,24 @@ const HeroSection = ({ onAskWatts }: HeroSectionProps) => {
         />
       </motion.div>
 
-      {/* Name */}
-      <motion.h1
+      {/* Name & info */}
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3, duration: 0.6 }}
-        className="text-4xl font-display font-black text-gradient-amber tracking-tight text-center"
+        className="text-center"
       >
-        60 Watts of Clarity
-      </motion.h1>
+        <p className="text-lg font-display font-semibold text-foreground">Tanya Williams</p>
+        <p className="text-xs text-muted-foreground mt-1">Founder & AI Consultant</p>
+        <h1 className="text-4xl font-display font-black text-gradient-amber tracking-tight mt-3">
+          60 Watts of Clarity
+        </h1>
+        <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto leading-relaxed">
+          No-code AI agent training for social work professionals.
+          <br />
+          Grounded in the NASW Code of Ethics.
+        </p>
+      </motion.div>
 
       {/* Social icons */}
       <motion.div
