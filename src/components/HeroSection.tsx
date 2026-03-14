@@ -34,6 +34,16 @@ const HeroSection = ({ onAskWatts }: HeroSectionProps) => {
         60 Watts of Clarity
       </motion.h1>
 
+      {/* Social icons */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="mt-5"
+      >
+        <SocialLinks />
+      </motion.div>
+
       {/* Dual CTAs */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
