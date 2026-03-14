@@ -7,6 +7,11 @@ type Message = {
   content: string;
 };
 
+interface AiChatAgentProps {
+  initialMessage?: string | null;
+  onMessageConsumed?: () => void;
+}
+
 const getAiResponse = (userMessage: string): string => {
   const msg = userMessage.toLowerCase();
 
@@ -23,23 +28,35 @@ const getAiResponse = (userMessage: string): string => {
     return "You can reach us at:\n\n📧 **hello@60wattsofclarity.com**\n📱 Via the social links above\n📅 Or book a free discovery call directly!\n\nWe typically respond within 24 hours.";
   }
   if (msg.includes("who") || msg.includes("tanya") || msg.includes("founder") || msg.includes("about")) {
-    return "**Tanya Williams** is the founder of 60 Watts of Clarity. She specializes in no-code AI agent training for social work professionals, helping them leverage AI tools ethically and effectively. Her framework — Learn AI Literacy → Build AI Agents → Deploy AI Agents — is grounded in the NASW Code of Ethics and backed by 90+ research sources.";
+    return "**Tanya Williams** is the founder of 60 Watts of Clarity. She specializes in no-code AI agent training for social work professionals, helping them leverage AI tools ethically and effectively.";
+  }
+  if (msg.includes("literacy") || msg.includes("workshop")) {
+    return "The **AI Literacy Workshop** ($497/session) is perfect for teams new to AI. It covers:\n\n• What AI can and can't do\n• Ethical considerations in social work\n• Hands-on demos of AI tools\n• Q&A with Tanya\n\nWant to book a session for your team?";
+  }
+  if (msg.includes("agent build") || msg.includes("custom agent")) {
+    return "The **AI Agent Build** ($1,997 one-time) is our most popular service! Tanya builds a custom no-code AI agent tailored to your specific practice needs. You get:\n\n• Discovery session\n• Custom agent development\n• Training on how to use it\n• 30 days of support\n\nReady to get started?";
+  }
+  if (msg.includes("team training") || msg.includes("cohort")) {
+    return "The **Team Training** program ($3,497/cohort) is a 6-week intensive for organizations. Your team will:\n\n• Master AI literacy fundamentals\n• Build their own AI agents\n• Learn ethical deployment strategies\n• Get ongoing support\n\nPerfect for agencies with 5-15 team members.";
+  }
+  if (msg.includes("vip") || msg.includes("strategy day")) {
+    return "The **VIP Strategy Day** ($4,997/day) is our premium offering — a full-day intensive with Tanya where you'll:\n\n• Audit your current workflows\n• Map AI integration opportunities\n• Build your first agent live\n• Leave with a complete AI roadmap\n\nThis is for leaders who want to move fast.";
   }
   if (msg.includes("hello") || msg.includes("hi") || msg.includes("hey")) {
     return "Hey there! 👋 Welcome to 60 Watts of Clarity. I'm here to help you learn about our AI consulting services for social work professionals. What would you like to know?";
   }
 
-  return "Great question! For the most detailed answer, I'd recommend booking a **free discovery call** with Tanya. She can walk you through exactly how 60 Watts of Clarity can help your practice. In the meantime, feel free to ask me about our services, pricing, or how to get started!";
+  return "Great question! For the most detailed answer, I'd recommend booking a **free discovery call** with Tanya. In the meantime, feel free to ask me about our services, pricing, or how to get started!";
 };
 
 const QUICK_PROMPTS = [
   "What services do you offer?",
   "How much does it cost?",
   "Tell me about Tanya",
-  "How do I book a call?",
+  "Book a call",
 ];
 
-const AiChatAgent = () => {
+const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -53,6 +70,14 @@ const AiChatAgent = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Handle pre-filled messages from service cards
+  useEffect(() => {
+    if (initialMessage) {
+      handleSend(initialMessage);
+      onMessageConsumed?.();
+    }
+  }, [initialMessage]);
 
   const handleSend = (text?: string) => {
     const message = text || input.trim();
