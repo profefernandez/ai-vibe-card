@@ -2,15 +2,18 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Loader2, LogOut, Globe, FileText, Plug, Brain, CreditCard } from "lucide-react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Loader2, LogOut } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
+import AdminSidebar, { type AdminSection } from "@/components/admin/AdminSidebar";
 import SiteImportTab from "@/components/admin/SiteImportTab";
 import ContentManagerTab from "@/components/admin/ContentManagerTab";
 import ApiConnectorTab from "@/components/admin/ApiConnectorTab";
 import AiTrainingTab from "@/components/admin/AiTrainingTab";
 import ReceivedCardsTab from "@/components/admin/ReceivedCardsTab";
+import ProfileTab from "@/components/admin/ProfileTab";
+import SettingsTab from "@/components/admin/SettingsTab";
 
 type Site = {
   id: string;
@@ -22,10 +25,21 @@ type Site = {
   created_at: string;
 };
 
+const sectionTitles: Record<AdminSection, string> = {
+  import: "Site Import",
+  content: "Content Manager",
+  ai: "AI Training",
+  cards: "Received Cards",
+  api: "API Connectors",
+  profile: "Profile / Card Info",
+  settings: "Settings",
+};
+
 const Admin = () => {
   const [user, setUser] = useState<User | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<AdminSection>("import");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,60 +84,53 @@ const Admin = () => {
 
   if (!user) return null;
 
+  const renderContent = () => {
+    switch (activeSection) {
+      case "import":
+        return <SiteImportTab user={user} sites={sites} fetchSites={fetchSites} />;
+      case "content":
+        return <ContentManagerTab sites={sites} />;
+      case "api":
+        return <ApiConnectorTab user={user} />;
+      case "ai":
+        return <AiTrainingTab user={user} />;
+      case "cards":
+        return <ReceivedCardsTab user={user} />;
+      case "profile":
+        return <ProfileTab user={user} />;
+      case "settings":
+        return <SettingsTab user={user} />;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-dark px-4 py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleSignOut}>
-            <LogOut className="w-4 h-4 mr-1" /> Sign Out
-          </Button>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-gradient-dark">
+        <AdminSidebar
+          activeSection={activeSection}
+          onSectionChange={setActiveSection}
+          onBack={() => navigate("/")}
+        />
+
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger />
+              <h1 className="text-lg font-semibold text-foreground font-sans">
+                {sectionTitles[activeSection]}
+              </h1>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4 mr-1" /> Sign Out
+            </Button>
+          </header>
+
+          <main className="flex-1 p-4 md:p-6 overflow-auto">
+            {renderContent()}
+          </main>
         </div>
-
-        {/* Tabs */}
-        <Tabs defaultValue="import" className="w-full">
-          <TabsList className="w-full justify-start bg-card/50 border border-border/30 h-auto flex-wrap gap-1 p-1">
-            <TabsTrigger value="import" className="text-xs gap-1.5">
-              <Globe className="w-3.5 h-3.5" /> Site Import
-            </TabsTrigger>
-            <TabsTrigger value="content" className="text-xs gap-1.5">
-              <FileText className="w-3.5 h-3.5" /> Content
-            </TabsTrigger>
-            <TabsTrigger value="api" className="text-xs gap-1.5">
-              <Plug className="w-3.5 h-3.5" /> API Connector
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="text-xs gap-1.5">
-              <Brain className="w-3.5 h-3.5" /> AI Training
-            </TabsTrigger>
-            <TabsTrigger value="cards" className="text-xs gap-1.5">
-              <CreditCard className="w-3.5 h-3.5" /> Received Cards
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="import">
-            <SiteImportTab user={user} sites={sites} fetchSites={fetchSites} />
-          </TabsContent>
-          <TabsContent value="content">
-            <ContentManagerTab sites={sites} />
-          </TabsContent>
-          <TabsContent value="api">
-            <ApiConnectorTab user={user} />
-          </TabsContent>
-          <TabsContent value="ai">
-            <AiTrainingTab user={user} />
-          </TabsContent>
-          <TabsContent value="cards">
-            <ReceivedCardsTab user={user} />
-          </TabsContent>
-        </Tabs>
       </div>
-    </div>
+    </SidebarProvider>
   );
 };
 
