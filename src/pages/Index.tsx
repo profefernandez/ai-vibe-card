@@ -1,25 +1,45 @@
-import ProfileHeader from "@/components/ProfileHeader";
-import SocialLinks from "@/components/SocialLinks";
-import LinkCategories from "@/components/LinkCategories";
+import { useRef } from "react";
+import HeroSection from "@/components/HeroSection";
+import ValueProps from "@/components/ValueProps";
 import ServicesSection from "@/components/ServicesSection";
-import AiChatBubble from "@/components/AiChatBubble";
+import LinkCategories from "@/components/LinkCategories";
+import AiChatBar, { type AiChatBarHandle } from "@/components/AiChatBar";
+import SocialLinks from "@/components/SocialLinks";
 
 const Index = () => {
-  return (
-    <div className="min-h-screen bg-gradient-dark flex justify-center">
-      <div className="w-full max-w-md mx-auto px-4 py-6 space-y-6">
-        <ProfileHeader />
-        <SocialLinks />
-        <LinkCategories />
-        <ServicesSection />
+  const chatBarRef = useRef<AiChatBarHandle>(null);
 
-        <p className="text-center text-[10px] text-muted-foreground/40 pb-20">
-          © 2026 60 Watts of Clarity
-        </p>
+  const handleAskAbout = (question: string) => {
+    chatBarRef.current?.sendMessage(question);
+  };
+
+  const handleAskWatts = () => {
+    chatBarRef.current?.focusInput();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-dark">
+      <div className="max-w-md mx-auto">
+        <HeroSection onAskWatts={handleAskWatts} />
+        <ValueProps />
+        <ServicesSection onAskAbout={handleAskAbout} />
+
+        <div className="px-6 py-10">
+          <LinkCategories />
+        </div>
+
+        {/* Footer */}
+        <footer className="px-6 pb-24 pt-6 border-t border-border/20">
+          <div className="flex justify-center mb-4">
+            <SocialLinks />
+          </div>
+          <p className="text-center text-[10px] text-muted-foreground/40">
+            © 2026 60 Watts of Clarity
+          </p>
+        </footer>
       </div>
 
-      {/* Floating AI Chat */}
-      <AiChatBubble />
+      <AiChatBar ref={chatBarRef} />
     </div>
   );
 };
