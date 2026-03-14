@@ -18,10 +18,10 @@ const HeroSection = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-md rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex flex-col"
+        className="w-full max-w-lg rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex flex-col"
       >
         {/* Content area */}
-        <div className="flex flex-col items-center px-6 pt-8 pb-6">
+        <div className="flex flex-col items-center px-8 pt-10 pb-8">
           {/* Brand name */}
           <motion.h1
             initial={{ opacity: 0, y: -15 }}
