@@ -1,149 +1,154 @@
-import { useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useCallback } from "react";
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
-import AiChatBar, { type AiChatBarHandle } from "./AiChatBar";
-import AiChatAgent from "./AiChatAgent";
-import { Calendar, Sparkles, X } from "lucide-react";
+import ExplorePanel from "./ExplorePanel";
+import { Calendar, Sparkles, Search, ChevronLeft } from "lucide-react";
 
 const HeroSection = () => {
-  const chatBarRef = useRef<AiChatBarHandle>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [isExploreOpen, setIsExploreOpen] = useState(false);
 
-  const handleAskWatts = () => {
-    chatBarRef.current?.focusInput();
+  // Drag-based slider
+  const dragX = useMotionValue(0);
+  const DRAG_THRESHOLD = -80;
+
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    if (info.offset.x < DRAG_THRESHOLD) {
+      setIsExploreOpen(true);
+    } else if (info.offset.x > -DRAG_THRESHOLD) {
+      setIsExploreOpen(false);
+    }
+    dragX.set(0);
   };
 
-  const handleChatSubmit = (message: string) => {
-    setPendingMessage(message);
-    setIsChatOpen(true);
-  };
-
-  const handleCloseChat = () => {
-    setIsChatOpen(false);
-    setPendingMessage(null);
-  };
-
-  const brandingContent = (
-    <>
-      {/* Brand name */}
-      <motion.h1
-        layout="position"
-        className={`font-display font-black text-gradient-amber tracking-tight text-center ${
-          isChatOpen ? "text-2xl mb-4" : "text-5xl mb-8"
-        } transition-all duration-300`}
-      >
-        60 Watts of Clarity
-      </motion.h1>
-
-      {/* Photo */}
-      <motion.div
-        layout="position"
-        className={`rounded-full overflow-hidden glow-amber border-2 border-primary/30 ${
-          isChatOpen ? "w-20 h-20 mb-3" : "w-32 h-32 mb-6"
-        } transition-all duration-300`}
-      >
-        <img
-          src={profilePhoto}
-          alt="Tanya Williams - Founder of 60 Watts of Clarity"
-          className="w-full h-full object-cover"
-        />
-      </motion.div>
-
-      {/* Name & info */}
-      <div className="text-center">
-        <p className={`font-display font-semibold text-foreground ${isChatOpen ? "text-base" : "text-xl"}`}>
-          Tanya Williams
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">Founder & AI Consultant</p>
-        <p className={`text-muted-foreground mt-3 max-w-xs mx-auto leading-relaxed ${isChatOpen ? "text-xs" : "text-sm"}`}>
-          No-code AI agent training for social work professionals.
-          <br />
-          Grounded in the NASW Code of Ethics.
-        </p>
-      </div>
-
-      {/* Social icons */}
-      <div className={isChatOpen ? "mt-4" : "mt-6"}>
-        <SocialLinks />
-      </div>
-
-      {/* Dual CTAs */}
-      <div className={`flex gap-3 ${isChatOpen ? "mt-4 flex-col" : "mt-8"}`}>
-        <a
-          href="https://calendly.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
-        >
-          <Calendar className="w-4 h-4" />
-          Book a Call
-        </a>
-        <button
-          onClick={handleAskWatts}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
-        >
-          <Sparkles className="w-4 h-4" />
-          Ask Watts
-        </button>
-      </div>
-    </>
-  );
+  const openExplore = useCallback(() => setIsExploreOpen(true), []);
+  const closeExplore = useCallback(() => setIsExploreOpen(false), []);
 
   return (
     <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4">
       <motion.div
         layout
-        transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className={`w-full rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex ${
-          isChatOpen ? "max-w-4xl flex-row" : "max-w-lg flex-col"
+        transition={{ type: "spring", damping: 32, stiffness: 220 }}
+        className={`relative w-full rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden ${
+          isExploreOpen ? "max-w-5xl" : "max-w-lg"
         }`}
-        style={{ minHeight: isChatOpen ? "80vh" : "auto" }}
+        style={{ minHeight: isExploreOpen ? "80vh" : "auto" }}
       >
-        {/* Business Card / Sidebar */}
-        <motion.div
-          layout
-          className={`flex flex-col items-center ${
-            isChatOpen
-              ? "w-72 flex-shrink-0 border-r border-border/30 px-6 py-8 overflow-y-auto"
-              : "px-8 pt-12 pb-10 w-full"
-          }`}
-        >
-          {brandingContent}
-        </motion.div>
-
-        {/* Chat Panel */}
-        <AnimatePresence>
-          {isChatOpen && (
-            <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "100%" }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 200 }}
-              className="flex-1 flex flex-col min-w-0 relative"
+        <div className={`flex h-full ${isExploreOpen ? "flex-row" : "flex-col"}`}>
+          {/* ── Business Card Side ── */}
+          <motion.div
+            layout
+            drag={!isExploreOpen ? "x" : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
+            onDragEnd={handleDragEnd}
+            style={{ x: !isExploreOpen ? dragX : 0 }}
+            className={`flex flex-col items-center cursor-grab active:cursor-grabbing ${
+              isExploreOpen
+                ? "w-80 flex-shrink-0 border-r border-border/30 px-6 py-8"
+                : "px-8 pt-12 pb-10 w-full"
+            }`}
+          >
+            {/* Brand name */}
+            <motion.h1
+              layout="position"
+              className={`font-display font-black text-gradient-amber tracking-tight text-center ${
+                isExploreOpen ? "text-xl mb-4" : "text-5xl mb-8"
+              } transition-[font-size] duration-300`}
             >
-              {/* Close button */}
-              <button
-                onClick={handleCloseChat}
-                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close chat"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              60 Watts of Clarity
+            </motion.h1>
 
-              <AiChatAgent
-                initialMessage={pendingMessage}
-                onMessageConsumed={() => setPendingMessage(null)}
+            {/* Photo */}
+            <motion.div
+              layout="position"
+              className={`rounded-full overflow-hidden glow-amber border-2 border-primary/30 ${
+                isExploreOpen ? "w-20 h-20 mb-3" : "w-32 h-32 mb-6"
+              } transition-all duration-300`}
+            >
+              <img
+                src={profilePhoto}
+                alt="Tanya Williams - Founder of 60 Watts of Clarity"
+                className="w-full h-full object-cover"
               />
             </motion.div>
-          )}
-        </AnimatePresence>
 
-        {/* Inline chat bar when collapsed */}
-        {!isChatOpen && (
-          <AiChatBar ref={chatBarRef} inline onSubmit={handleChatSubmit} />
-        )}
+            {/* Name & info */}
+            <div className="text-center">
+              <p className={`font-display font-semibold text-foreground ${isExploreOpen ? "text-base" : "text-xl"}`}>
+                Tanya Williams
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Founder & AI Consultant</p>
+              <p className={`text-muted-foreground mt-3 max-w-xs mx-auto leading-relaxed ${isExploreOpen ? "text-xs" : "text-sm"}`}>
+                No-code AI agent training for social work professionals.
+                <br />
+                Grounded in the NASW Code of Ethics.
+              </p>
+            </div>
+
+            {/* Social icons */}
+            <div className={isExploreOpen ? "mt-4" : "mt-6"}>
+              <SocialLinks />
+            </div>
+
+            {/* CTAs */}
+            <div className={`flex gap-3 ${isExploreOpen ? "mt-4 flex-col w-full" : "mt-8"}`}>
+              <a
+                href="https://calendly.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
+              >
+                <Calendar className="w-4 h-4" />
+                Book a Call
+              </a>
+              <button
+                onClick={openExplore}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Search className="w-4 h-4" />
+                Explore
+              </button>
+            </div>
+
+            {/* Swipe hint when card is in default mode */}
+            {!isExploreOpen && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="mt-6 text-[10px] text-muted-foreground/40 flex items-center gap-1"
+              >
+                <ChevronLeft className="w-3 h-3 animate-pulse" />
+                Swipe or tap Explore
+              </motion.p>
+            )}
+          </motion.div>
+
+          {/* ── Explore Panel ── */}
+          <AnimatePresence>
+            {isExploreOpen && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "100%" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ type: "spring", damping: 32, stiffness: 220 }}
+                className="flex-1 min-w-0 relative"
+              >
+                {/* Back / close */}
+                <button
+                  onClick={closeExplore}
+                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Close explore"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <ExplorePanel />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
     </section>
   );
