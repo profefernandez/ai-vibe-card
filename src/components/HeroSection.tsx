@@ -4,7 +4,7 @@ import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import AiChatBar, { type AiChatBarHandle } from "./AiChatBar";
 import AiChatAgent from "./AiChatAgent";
-import { Calendar, Sparkles, X } from "lucide-react";
+import { Calendar, Sparkles } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Drawer,
@@ -34,11 +34,6 @@ const HeroSection = () => {
     setIsChatOpen(true);
   };
 
-  const handleCloseChat = () => {
-    setIsChatOpen(false);
-    setPendingMessage(null);
-  };
-
   const chatContent = (
     <div className="flex flex-col h-full">
       <AiChatAgent
@@ -49,84 +44,83 @@ const HeroSection = () => {
   );
 
   return (
-    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-3 sm:px-6">
+    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8">
       {/* Business Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-sm sm:max-w-md md:max-w-xl lg:max-w-2xl rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden"
+        className="w-full max-w-2xl lg:max-w-3xl rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden"
       >
         {/* Top accent bar */}
         <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary" />
 
-        {/* Card content — horizontal on md+, stacked on mobile */}
-        <div className="flex flex-col md:flex-row">
-          {/* Left: Photo + identity */}
-          <div className="flex flex-col items-center md:items-start md:border-r md:border-border/30 px-6 sm:px-8 md:px-10 pt-8 pb-6 md:py-10 md:w-[45%]">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.15, type: "spring", stiffness: 180 }}
-              className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-full overflow-hidden glow-amber border-2 border-primary/30 mb-4 md:mb-6"
-            >
-              <img
-                src={profilePhoto}
-                alt="Tanya Williams - Founder of 60 Watts of Clarity"
-                className="w-full h-full object-cover"
-              />
-            </motion.div>
+        {/* Card content — single column, centered */}
+        <div className="flex flex-col items-center px-8 sm:px-12 lg:px-16 pt-10 sm:pt-14 lg:pt-16 pb-8 sm:pb-10">
+          {/* Brand name */}
+          <motion.h1
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="font-display font-black text-gradient-amber tracking-tight text-center text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-tight"
+          >
+            60 Watts of Clarity
+          </motion.h1>
 
-            <h2 className="font-display font-bold text-foreground text-xl sm:text-2xl md:text-3xl lg:text-4xl text-center md:text-left">
-              Tanya Williams
-            </h2>
-            <p className="text-sm sm:text-base text-primary font-semibold mt-1 tracking-wide">
-              Founder &amp; AI Consultant
-            </p>
+          <p className="text-muted-foreground mt-3 sm:mt-4 text-base sm:text-lg lg:text-xl text-center max-w-lg leading-relaxed">
+            No-code AI agent training for social work professionals.
+            <br className="hidden sm:block" />
+            Grounded in the NASW Code of Ethics.
+          </p>
 
-            <div className="mt-4 md:mt-6">
-              <SocialLinks />
-            </div>
+          {/* Divider */}
+          <div className="w-24 h-px bg-primary/40 my-8 sm:my-10" />
+
+          {/* Photo */}
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.15, type: "spring", stiffness: 180 }}
+            className="w-28 h-28 sm:w-36 sm:h-36 lg:w-40 lg:h-40 rounded-full overflow-hidden glow-amber border-2 border-primary/30"
+          >
+            <img
+              src={profilePhoto}
+              alt="Tanya Williams - Founder of 60 Watts of Clarity"
+              className="w-full h-full object-cover"
+            />
+          </motion.div>
+
+          {/* Name & title */}
+          <h2 className="font-display font-bold text-foreground text-2xl sm:text-3xl lg:text-4xl mt-5 sm:mt-6 text-center">
+            Tanya Williams
+          </h2>
+          <p className="text-primary font-semibold text-base sm:text-lg mt-1 tracking-wide">
+            Founder &amp; AI Consultant
+          </p>
+
+          {/* Social links */}
+          <div className="mt-5 sm:mt-6">
+            <SocialLinks />
           </div>
 
-          {/* Right: Brand + mission + CTAs */}
-          <div className="flex flex-col items-center md:items-start justify-center px-6 sm:px-8 md:px-10 pb-8 md:py-10 md:w-[55%]">
-            <motion.h1
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="font-display font-black text-gradient-amber tracking-tight text-center md:text-left text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-tight"
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-8 sm:mt-10 w-full sm:w-auto">
+            <a
+              href="https://calendly.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 px-8 py-3.5 sm:py-4 rounded-2xl bg-primary text-primary-foreground font-semibold text-base sm:text-lg glow-amber hover:scale-105 active:scale-95 transition-transform"
             >
-              60 Watts
-              <br />
-              of Clarity
-            </motion.h1>
-
-            <p className="text-muted-foreground mt-4 md:mt-6 max-w-sm leading-relaxed text-sm sm:text-base md:text-lg text-center md:text-left">
-              No-code AI agent training for social work professionals.
-              <br className="hidden sm:block" />
-              Grounded in the NASW Code of Ethics.
-            </p>
-
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-3 mt-6 md:mt-8 w-full sm:w-auto">
-              <a
-                href="https://calendly.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm sm:text-base glow-amber hover:scale-105 active:scale-95 transition-transform"
-              >
-                <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
-                Book a Call
-              </a>
-              <button
-                onClick={handleAskWatts}
-                className="flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm sm:text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                Ask Watts
-              </button>
-            </div>
+              <Calendar className="w-5 h-5" />
+              Book a Call
+            </a>
+            <button
+              onClick={handleAskWatts}
+              className="flex items-center justify-center gap-2 px-8 py-3.5 sm:py-4 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-base sm:text-lg hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Sparkles className="w-5 h-5" />
+              Ask Watts
+            </button>
           </div>
         </div>
 
