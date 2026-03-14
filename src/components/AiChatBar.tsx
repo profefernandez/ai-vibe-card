@@ -1,7 +1,5 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, X } from "lucide-react";
-import AiChatAgent from "./AiChatAgent";
+import { Send, Sparkles } from "lucide-react";
 
 export interface AiChatBarHandle {
   focusInput: () => void;
@@ -10,30 +8,27 @@ export interface AiChatBarHandle {
 
 interface AiChatBarProps {
   inline?: boolean;
+  onSubmit?: (message: string) => void;
 }
 
-const AiChatBar = forwardRef<AiChatBarHandle, AiChatBarProps>(({ inline }, ref) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const AiChatBar = forwardRef<AiChatBarHandle, AiChatBarProps>(({ inline, onSubmit }, ref) => {
   const [quickInput, setQuickInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
       inputRef.current?.focus();
     },
     sendMessage: (msg: string) => {
-      setPendingMessage(msg);
-      setIsExpanded(true);
+      onSubmit?.(msg);
     },
   }));
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickInput.trim()) return;
-    setPendingMessage(quickInput.trim());
+    onSubmit?.(quickInput.trim());
     setQuickInput("");
-    setIsExpanded(true);
   };
 
   const inputBar = (
@@ -61,74 +56,9 @@ const AiChatBar = forwardRef<AiChatBarHandle, AiChatBarProps>(({ inline }, ref) 
     </form>
   );
 
-  return (
-    <>
-      {/* Inline input bar (inside the card) */}
-      {inline && !isExpanded && inputBar}
+  if (!inline) return null;
 
-      {/* Fixed bottom bar (non-inline fallback) */}
-      {!inline && (
-        <div className="fixed bottom-0 left-0 right-0 z-40">
-          <div className="max-w-md mx-auto">
-            <AnimatePresence>
-              {!isExpanded && (
-                <motion.div
-                  initial={{ y: 100 }}
-                  animate={{ y: 0 }}
-                  exit={{ y: 100 }}
-                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                  className="mx-3 mb-3"
-                >
-                  <div className="rounded-2xl border border-primary/20 glow-amber-sm overflow-hidden bg-card/95 backdrop-blur-xl">
-                    {inputBar}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      )}
-
-      {/* Expanded chat panel */}
-      <AnimatePresence>
-        {isExpanded && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsExpanded(false)}
-              className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 h-[85vh] max-w-md mx-auto bg-gradient-card rounded-t-3xl border border-border/50 border-b-0 overflow-hidden flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 pt-4 pb-1">
-                <div className="w-10 h-1 rounded-full bg-border/60 mx-auto absolute left-1/2 -translate-x-1/2 top-2" />
-                <div />
-                <button
-                  onClick={() => setIsExpanded(false)}
-                  className="p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close chat"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-hidden">
-                <AiChatAgent initialMessage={pendingMessage} onMessageConsumed={() => setPendingMessage(null)} />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </>
-  );
+  return inputBar;
 });
 
 AiChatBar.displayName = "AiChatBar";
