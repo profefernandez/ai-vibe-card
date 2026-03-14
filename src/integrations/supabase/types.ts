@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          personality: string | null
+          response_style: string | null
+          rules: Json | null
+          system_prompt: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          personality?: string | null
+          response_style?: string | null
+          rules?: Json | null
+          system_prompt?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          personality?: string | null
+          response_style?: string | null
+          rules?: Json | null
+          system_prompt?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      api_connections: {
+        Row: {
+          api_key_encrypted: string
+          created_at: string
+          id: string
+          is_active: boolean
+          model_name: string | null
+          provider: string
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model_name?: string | null
+          provider: string
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          model_name?: string | null
+          provider?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       content_blocks: {
         Row: {
           block_order: number | null
@@ -62,6 +125,56 @@ export type Database = {
           {
             foreignKeyName: "content_blocks_site_id_fkey"
             columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      received_cards: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          owner_id: string
+          sender_avatar: string | null
+          sender_domain: string | null
+          sender_name: string
+          sender_site_id: string | null
+          sender_tagline: string | null
+          usage_count: number
+          usage_limit: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_id: string
+          sender_avatar?: string | null
+          sender_domain?: string | null
+          sender_name?: string
+          sender_site_id?: string | null
+          sender_tagline?: string | null
+          usage_count?: number
+          usage_limit?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          owner_id?: string
+          sender_avatar?: string | null
+          sender_domain?: string | null
+          sender_name?: string
+          sender_site_id?: string | null
+          sender_tagline?: string | null
+          usage_count?: number
+          usage_limit?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "received_cards_sender_site_id_fkey"
+            columns: ["sender_site_id"]
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
@@ -117,6 +230,7 @@ export type Database = {
           name: string | null
           page_count: number | null
           scrape_status: string
+          share_usage_limit: number
           updated_at: string
           user_id: string
         }
@@ -127,6 +241,7 @@ export type Database = {
           name?: string | null
           page_count?: number | null
           scrape_status?: string
+          share_usage_limit?: number
           updated_at?: string
           user_id: string
         }
@@ -137,6 +252,7 @@ export type Database = {
           name?: string | null
           page_count?: number | null
           scrape_status?: string
+          share_usage_limit?: number
           updated_at?: string
           user_id?: string
         }
