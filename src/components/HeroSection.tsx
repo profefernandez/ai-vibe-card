@@ -1,12 +1,49 @@
-import { useState, useCallback } from "react";
-import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
+import { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import ExplorePanel from "./ExplorePanel";
 import { Calendar, Sparkles, Search, ChevronLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Profile {
+  display_name: string;
+  tagline: string;
+  bio: string;
+  avatar_url: string;
+  calendly_url: string;
+}
 
 const HeroSection = () => {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    // Fetch the first profile (site owner)
+    supabase
+      .from("profiles")
+      .select("*")
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setProfile({
+            display_name: data.display_name || "",
+            tagline: data.tagline || "",
+            bio: data.bio || "",
+            avatar_url: data.avatar_url || "",
+            calendly_url: data.calendly_url || "",
+          });
+        }
+      });
+  }, []);
+
+  // Derived values with fallbacks
+  const displayName = profile?.display_name || "Tanya Williams";
+  const tagline = profile?.tagline || "Founder & AI Consultant";
+  const bio = profile?.bio || "No-code AI agent training for social work professionals.\nGrounded in the NASW Code of Ethics.";
+  const avatarUrl = profile?.avatar_url || profilePhoto;
+  const calendlyUrl = profile?.calendly_url || "https://calendly.com";
 
   // Drag-based slider
   const dragX = useMotionValue(0);
@@ -67,22 +104,26 @@ const HeroSection = () => {
               } transition-all duration-300`}
             >
               <img
-                src={profilePhoto}
-                alt="Tanya Williams - Founder of 60 Watts of Clarity"
+                src={avatarUrl}
+                alt={`${displayName} - ${tagline}`}
                 className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
               />
             </motion.div>
 
             {/* Name & info */}
             <div className="text-center">
               <p className={`font-display font-semibold text-foreground ${isExploreOpen ? "text-base" : "text-xl"}`}>
-                Tanya Williams
+                {displayName}
               </p>
-              <p className="text-xs text-muted-foreground mt-1">Founder & AI Consultant</p>
+              <p className="text-xs text-muted-foreground mt-1">{tagline}</p>
               <p className={`text-muted-foreground mt-3 max-w-xs mx-auto leading-relaxed ${isExploreOpen ? "text-xs" : "text-sm"}`}>
-                No-code AI agent training for social work professionals.
-                <br />
-                Grounded in the NASW Code of Ethics.
+                {bio.split("\n").map((line, i) => (
+                  <span key={i}>
+                    {line}
+                    {i < bio.split("\n").length - 1 && <br />}
+                  </span>
+                ))}
               </p>
             </div>
 
@@ -94,7 +135,7 @@ const HeroSection = () => {
             {/* CTAs */}
             <div className={`flex gap-3 ${isExploreOpen ? "mt-4 flex-col w-full" : "mt-8"}`}>
               <a
-                href="https://calendly.com"
+                href={calendlyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
