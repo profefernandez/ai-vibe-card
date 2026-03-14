@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import profilePhoto from "@/assets/profile-photo.png";
+import SocialLinks from "./SocialLinks";
 import { Calendar, Sparkles } from "lucide-react";
 
 interface HeroSectionProps {
