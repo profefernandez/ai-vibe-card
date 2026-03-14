@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useRef, forwardRef, useImperativeHandle } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Sparkles, X, ChevronDown } from "lucide-react";
+import { Send, Sparkles, X } from "lucide-react";
 import AiChatAgent from "./AiChatAgent";
 
 export interface AiChatBarHandle {
@@ -8,7 +8,11 @@ export interface AiChatBarHandle {
   sendMessage: (msg: string) => void;
 }
 
-const AiChatBar = forwardRef<AiChatBarHandle>((_, ref) => {
+interface AiChatBarProps {
+  inline?: boolean;
+}
+
+const AiChatBar = forwardRef<AiChatBarHandle, AiChatBarProps>(({ inline }, ref) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [quickInput, setQuickInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -16,11 +20,7 @@ const AiChatBar = forwardRef<AiChatBarHandle>((_, ref) => {
 
   useImperativeHandle(ref, () => ({
     focusInput: () => {
-      if (!isExpanded) {
-        inputRef.current?.focus();
-      } else {
-        // already expanded
-      }
+      inputRef.current?.focus();
     },
     sendMessage: (msg: string) => {
       setPendingMessage(msg);
@@ -36,54 +36,58 @@ const AiChatBar = forwardRef<AiChatBarHandle>((_, ref) => {
     setIsExpanded(true);
   };
 
-  const handleBarClick = () => {
-    if (!isExpanded) {
-      setIsExpanded(true);
-    }
-  };
+  const inputBar = (
+    <form
+      onSubmit={handleQuickSubmit}
+      className="flex items-center bg-background/50 border-t border-border/30 overflow-hidden"
+    >
+      <div className="pl-4 pr-2 py-3 flex items-center gap-2 flex-shrink-0">
+        <Sparkles className="w-4 h-4 text-primary" />
+      </div>
+      <input
+        ref={inputRef}
+        value={quickInput}
+        onChange={(e) => setQuickInput(e.target.value)}
+        placeholder="Ask Watts anything..."
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 py-3 pr-2 focus:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={!quickInput.trim()}
+        className="mr-3 w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+      >
+        <Send className="w-3.5 h-3.5" />
+      </button>
+    </form>
+  );
 
   return (
     <>
-      {/* Persistent bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="max-w-md mx-auto">
-          <AnimatePresence>
-            {!isExpanded && (
-              <motion.div
-                initial={{ y: 100 }}
-                animate={{ y: 0 }}
-                exit={{ y: 100 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="mx-3 mb-3"
-              >
-                <form
-                  onSubmit={handleQuickSubmit}
-                  onClick={handleBarClick}
-                  className="relative flex items-center bg-card/95 backdrop-blur-xl rounded-2xl border border-primary/20 glow-amber-sm overflow-hidden"
+      {/* Inline input bar (inside the card) */}
+      {inline && !isExpanded && inputBar}
+
+      {/* Fixed bottom bar (non-inline fallback) */}
+      {!inline && (
+        <div className="fixed bottom-0 left-0 right-0 z-40">
+          <div className="max-w-md mx-auto">
+            <AnimatePresence>
+              {!isExpanded && (
+                <motion.div
+                  initial={{ y: 100 }}
+                  animate={{ y: 0 }}
+                  exit={{ y: 100 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                  className="mx-3 mb-3"
                 >
-                  <div className="pl-4 pr-2 py-3 flex items-center gap-2 flex-shrink-0">
-                    <Sparkles className="w-4 h-4 text-primary" />
+                  <div className="rounded-2xl border border-primary/20 glow-amber-sm overflow-hidden bg-card/95 backdrop-blur-xl">
+                    {inputBar}
                   </div>
-                  <input
-                    ref={inputRef}
-                    value={quickInput}
-                    onChange={(e) => setQuickInput(e.target.value)}
-                    placeholder="Ask Watts anything..."
-                    className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 py-3 pr-2 focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!quickInput.trim()}
-                    className="mr-2 w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 transition-all hover:scale-105 active:scale-95 flex-shrink-0"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Expanded chat panel */}
       <AnimatePresence>
