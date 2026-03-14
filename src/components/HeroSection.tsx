@@ -1,15 +1,29 @@
 import { useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import AiChatBar, { type AiChatBarHandle } from "./AiChatBar";
 import AiChatAgent from "./AiChatAgent";
 import { Calendar, Sparkles, X } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+  DrawerDescription,
+} from "@/components/ui/drawer";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 
 const HeroSection = () => {
   const chatBarRef = useRef<AiChatBarHandle>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const handleAskWatts = () => {
     chatBarRef.current?.focusInput();
@@ -25,126 +39,125 @@ const HeroSection = () => {
     setPendingMessage(null);
   };
 
-  const brandingContent = (
-    <>
-      {/* Brand name */}
-      <motion.h1
-        layout="position"
-        className={`font-display font-black text-gradient-amber tracking-tight text-center ${
-          isChatOpen ? "text-2xl mb-4" : "text-5xl mb-8"
-        } transition-all duration-300`}
-      >
-        60 Watts of Clarity
-      </motion.h1>
-
-      {/* Photo */}
-      <motion.div
-        layout="position"
-        className={`rounded-full overflow-hidden glow-amber border-2 border-primary/30 ${
-          isChatOpen ? "w-20 h-20 mb-3" : "w-32 h-32 mb-6"
-        } transition-all duration-300`}
-      >
-        <img
-          src={profilePhoto}
-          alt="Tanya Williams - Founder of 60 Watts of Clarity"
-          className="w-full h-full object-cover"
-        />
-      </motion.div>
-
-      {/* Name & info */}
-      <div className="text-center">
-        <p className={`font-display font-semibold text-foreground ${isChatOpen ? "text-base" : "text-xl"}`}>
-          Tanya Williams
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">Founder & AI Consultant</p>
-        <p className={`text-muted-foreground mt-3 max-w-xs mx-auto leading-relaxed ${isChatOpen ? "text-xs" : "text-sm"}`}>
-          No-code AI agent training for social work professionals.
-          <br />
-          Grounded in the NASW Code of Ethics.
-        </p>
-      </div>
-
-      {/* Social icons */}
-      <div className={isChatOpen ? "mt-4" : "mt-6"}>
-        <SocialLinks />
-      </div>
-
-      {/* Dual CTAs */}
-      <div className={`flex gap-3 ${isChatOpen ? "mt-4 flex-col" : "mt-8"}`}>
-        <a
-          href="https://calendly.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm glow-amber hover:scale-105 active:scale-95 transition-transform"
-        >
-          <Calendar className="w-4 h-4" />
-          Book a Call
-        </a>
-        <button
-          onClick={handleAskWatts}
-          className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
-        >
-          <Sparkles className="w-4 h-4" />
-          Ask Watts
-        </button>
-      </div>
-    </>
+  const chatContent = (
+    <div className="flex flex-col h-full">
+      <AiChatAgent
+        initialMessage={pendingMessage}
+        onMessageConsumed={() => setPendingMessage(null)}
+      />
+    </div>
   );
 
   return (
-    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4">
+    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-3 sm:px-6">
+      {/* Business Card */}
       <motion.div
-        layout
-        transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className={`w-full rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden flex ${
-          isChatOpen ? "max-w-4xl flex-row" : "max-w-lg flex-col"
-        }`}
-        style={{ minHeight: isChatOpen ? "80vh" : "auto" }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-sm sm:max-w-md md:max-w-xl lg:max-w-2xl rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden"
       >
-        {/* Business Card / Sidebar */}
-        <motion.div
-          layout
-          className={`flex flex-col items-center ${
-            isChatOpen
-              ? "w-72 flex-shrink-0 border-r border-border/30 px-6 py-8 overflow-y-auto"
-              : "px-8 pt-12 pb-10 w-full"
-          }`}
-        >
-          {brandingContent}
-        </motion.div>
+        {/* Top accent bar */}
+        <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary" />
 
-        {/* Chat Panel */}
-        <AnimatePresence>
-          {isChatOpen && (
+        {/* Card content — horizontal on md+, stacked on mobile */}
+        <div className="flex flex-col md:flex-row">
+          {/* Left: Photo + identity */}
+          <div className="flex flex-col items-center md:items-start md:border-r md:border-border/30 px-6 sm:px-8 md:px-10 pt-8 pb-6 md:py-10 md:w-[45%]">
             <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "100%" }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 200 }}
-              className="flex-1 flex flex-col min-w-0 relative"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.15, type: "spring", stiffness: 180 }}
+              className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 lg:w-36 lg:h-36 rounded-full overflow-hidden glow-amber border-2 border-primary/30 mb-4 md:mb-6"
             >
-              {/* Close button */}
-              <button
-                onClick={handleCloseChat}
-                className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close chat"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <AiChatAgent
-                initialMessage={pendingMessage}
-                onMessageConsumed={() => setPendingMessage(null)}
+              <img
+                src={profilePhoto}
+                alt="Tanya Williams - Founder of 60 Watts of Clarity"
+                className="w-full h-full object-cover"
               />
             </motion.div>
-          )}
-        </AnimatePresence>
 
-        {/* Inline chat bar when collapsed */}
-        {!isChatOpen && (
-          <AiChatBar ref={chatBarRef} inline onSubmit={handleChatSubmit} />
-        )}
+            <h2 className="font-display font-bold text-foreground text-xl sm:text-2xl md:text-3xl lg:text-4xl text-center md:text-left">
+              Tanya Williams
+            </h2>
+            <p className="text-sm sm:text-base text-primary font-semibold mt-1 tracking-wide">
+              Founder &amp; AI Consultant
+            </p>
+
+            <div className="mt-4 md:mt-6">
+              <SocialLinks />
+            </div>
+          </div>
+
+          {/* Right: Brand + mission + CTAs */}
+          <div className="flex flex-col items-center md:items-start justify-center px-6 sm:px-8 md:px-10 pb-8 md:py-10 md:w-[55%]">
+            <motion.h1
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className="font-display font-black text-gradient-amber tracking-tight text-center md:text-left text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-tight"
+            >
+              60 Watts
+              <br />
+              of Clarity
+            </motion.h1>
+
+            <p className="text-muted-foreground mt-4 md:mt-6 max-w-sm leading-relaxed text-sm sm:text-base md:text-lg text-center md:text-left">
+              No-code AI agent training for social work professionals.
+              <br className="hidden sm:block" />
+              Grounded in the NASW Code of Ethics.
+            </p>
+
+            {/* CTAs */}
+            <div className="flex flex-col sm:flex-row gap-3 mt-6 md:mt-8 w-full sm:w-auto">
+              <a
+                href="https://calendly.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm sm:text-base glow-amber hover:scale-105 active:scale-95 transition-transform"
+              >
+                <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
+                Book a Call
+              </a>
+              <button
+                onClick={handleAskWatts}
+                className="flex items-center justify-center gap-2 px-6 py-3 sm:py-3.5 rounded-2xl bg-secondary border border-primary/30 text-primary font-semibold text-sm sm:text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                Ask Watts
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Inline chat bar at the bottom */}
+        <AiChatBar ref={chatBarRef} inline onSubmit={handleChatSubmit} />
+
+        {/* Bottom accent bar */}
+        <div className="h-1 w-full bg-gradient-to-r from-primary/20 via-primary/60 to-primary/20" />
       </motion.div>
+
+      {/* Chat panel — Drawer on mobile, Sheet on desktop */}
+      {isMobile ? (
+        <Drawer open={isChatOpen} onOpenChange={setIsChatOpen}>
+          <DrawerContent className="h-[85vh] bg-card border-border/50">
+            <DrawerTitle className="sr-only">Ask Watts Chat</DrawerTitle>
+            <DrawerDescription className="sr-only">Chat with the AI assistant</DrawerDescription>
+            {chatContent}
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Sheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+          <SheetContent
+            side="right"
+            className="w-[480px] sm:max-w-[480px] bg-card border-border/50 p-0 flex flex-col"
+          >
+            <SheetTitle className="sr-only">Ask Watts Chat</SheetTitle>
+            <SheetDescription className="sr-only">Chat with the AI assistant</SheetDescription>
+            {chatContent}
+          </SheetContent>
+        </Sheet>
+      )}
     </section>
   );
 };
