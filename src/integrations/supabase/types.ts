@@ -14,7 +14,134 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      content_blocks: {
+        Row: {
+          block_order: number | null
+          body: string | null
+          category: string | null
+          created_at: string
+          heading: string | null
+          id: string
+          images: string[] | null
+          page_id: string
+          site_id: string
+          tags: string[] | null
+        }
+        Insert: {
+          block_order?: number | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          heading?: string | null
+          id?: string
+          images?: string[] | null
+          page_id: string
+          site_id: string
+          tags?: string[] | null
+        }
+        Update: {
+          block_order?: number | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          heading?: string | null
+          id?: string
+          images?: string[] | null
+          page_id?: string
+          site_id?: string
+          tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_blocks_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "site_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_blocks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_pages: {
+        Row: {
+          created_at: string
+          html: string | null
+          id: string
+          markdown: string | null
+          metadata: Json | null
+          site_id: string
+          title: string | null
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          html?: string | null
+          id?: string
+          markdown?: string | null
+          metadata?: Json | null
+          site_id: string
+          title?: string | null
+          url: string
+        }
+        Update: {
+          created_at?: string
+          html?: string | null
+          id?: string
+          markdown?: string | null
+          metadata?: Json | null
+          site_id?: string
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_pages_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sites: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          name: string | null
+          page_count: number | null
+          scrape_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          name?: string | null
+          page_count?: number | null
+          scrape_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          name?: string | null
+          page_count?: number | null
+          scrape_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
