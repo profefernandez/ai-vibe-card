@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor, Plus, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { applyTheme } from "@/lib/theme";
 
@@ -25,15 +26,83 @@ interface RobotDirective {
   rules: { action: "allow" | "disallow"; path: string }[];
 }
 
+interface CrawlerToggles {
+  searchEngines: boolean;
+  socialPreviews: boolean;
+  aiBots: boolean;
+}
+
+/** Convert simple toggles → robots.txt directive array for storage. */
+function togglesToDirectives(t: CrawlerToggles): RobotDirective[] {
+  const directives: RobotDirective[] = [];
+
+  // General crawlers (covers Google, Bing, and everything else)
+  directives.push({
+    userAgent: "*",
+    rules: [{ action: t.searchEngines ? "allow" : "disallow", path: "/" }],
+  });
+
+  // Social media preview bots — only add explicit rules if different from the wildcard
+  if (t.socialPreviews && !t.searchEngines) {
+    directives.push(
+      { userAgent: "Twitterbot", rules: [{ action: "allow", path: "/" }] },
+      { userAgent: "facebookexternalhit", rules: [{ action: "allow", path: "/" }] },
+    );
+  } else if (!t.socialPreviews && t.searchEngines) {
+    directives.push(
+      { userAgent: "Twitterbot", rules: [{ action: "disallow", path: "/" }] },
+      { userAgent: "facebookexternalhit", rules: [{ action: "disallow", path: "/" }] },
+    );
+  }
+
+  // AI bots
+  if (!t.aiBots) {
+    directives.push(
+      { userAgent: "GPTBot", rules: [{ action: "disallow", path: "/" }] },
+      { userAgent: "ChatGPT-User", rules: [{ action: "disallow", path: "/" }] },
+      { userAgent: "Claude-Web", rules: [{ action: "disallow", path: "/" }] },
+      { userAgent: "Bytespider", rules: [{ action: "disallow", path: "/" }] },
+      { userAgent: "CCBot", rules: [{ action: "disallow", path: "/" }] },
+    );
+  }
+
+  return directives;
+}
+
+/** Convert stored directives back → simple toggles. */
+function directivesToToggles(directives: RobotDirective[]): CrawlerToggles {
+  const find = (ua: string) => directives.find((d) => d.userAgent === ua);
+  const isAllowed = (d?: RobotDirective) => !d || d.rules.every((r) => r.action === "allow");
+
+  const wildcard = find("*");
+  const searchEngines = isAllowed(wildcard);
+
+  const twitter = find("Twitterbot");
+  const facebook = find("facebookexternalhit");
+  // If explicit social bot rules exist, use those; otherwise inherit from wildcard
+  const socialPreviews = twitter || facebook
+    ? isAllowed(twitter) && isAllowed(facebook)
+    : searchEngines;
+
+  const gpt = find("GPTBot");
+  const claude = find("Claude-Web");
+  // If explicit AI bot rules exist, use those; otherwise inherit from wildcard
+  const aiBots = gpt || claude
+    ? isAllowed(gpt) && isAllowed(claude)
+    : searchEngines;
+
+  return { searchEngines, socialPreviews, aiBots };
+}
+
 const ACCENT_COLORS = [
   { name: "amber", hsl: "38 95% 50%", bg: "bg-amber-500" },
   { name: "blue", hsl: "217 91% 60%", bg: "bg-blue-500" },
   { name: "green", hsl: "142 71% 45%", bg: "bg-green-600" },
   { name: "purple", hsl: "262 83% 58%", bg: "bg-purple-500" },
-  { name: "rose", hsl: "347 77% 50%", bg: "bg-rose-500" },
-  { name: "teal", hsl: "172 66% 50%", bg: "bg-teal-500" },
-  { name: "orange", hsl: "25 95% 53%", bg: "bg-orange-500" },
-  { name: "cyan", hsl: "189 94% 43%", bg: "bg-cyan-600" },
+{ name: "rose", hsl: "347 77% 50%", bg: "bg-rose-500" },
+{ name: "teal", hsl: "172 66% 50%", bg: "bg-teal-500" },
+{ name: "orange", hsl: "25 95% 53%", bg: "bg-orange-500" },
+{ name: "cyan", hsl: "189 94% 43%", bg: "bg-cyan-600" },
 ];
 
 const THEME_OPTIONS = [
@@ -41,8 +110,6 @@ const THEME_OPTIONS = [
   { value: "light", label: "Light", icon: Sun },
   { value: "system", label: "System", icon: Monitor },
 ] as const;
-
-const USER_AGENTS = ["*", "Googlebot", "Bingbot", "Twitterbot", "facebookexternalhit", "Slurp", "DuckDuckBot", "Baiduspider", "YandexBot"];
 
 export default function SettingsTab({ user }: SettingsTabProps) {
   const [sites, setSites] = useState<SiteSettings[]>([]);
@@ -55,9 +122,12 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
   const [ogImageUrl, setOgImageUrl] = useState("");
-  const [robotsDirectives, setRobotsDirectives] = useState<RobotDirective[]>([
-    { userAgent: "*", rules: [{ action: "allow", path: "/" }] },
-  ]);
+  const [twitterHandle, setTwitterHandle] = useState("");
+  const [crawlerToggles, setCrawlerToggles] = useState<CrawlerToggles>({
+    searchEngines: true,
+    socialPreviews: true,
+    aiBots: true,
+  });
   const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
@@ -67,7 +137,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   const fetchData = async () => {
     const [sitesRes, profileRes] = await Promise.all([
       db.from("sites").select("id, domain, share_usage_limit").eq("user_id", user.id).order("created_at", { ascending: false }),
-      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, robots_txt").eq("user_id", user.id).maybeSingle(),
+      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt").eq("user_id", user.id).maybeSingle(),
     ]);
     setSites((sitesRes.data as SiteSettings[]) || []);
     if (profileRes.data) {
@@ -77,8 +147,9 @@ export default function SettingsTab({ user }: SettingsTabProps) {
       setSeoTitle(p.seo_title || "");
       setSeoDescription(p.seo_description || "");
       setOgImageUrl(p.og_image_url || "");
+      setTwitterHandle(p.twitter_handle || "");
       if (Array.isArray(p.robots_txt) && p.robots_txt.length > 0) {
-        setRobotsDirectives(p.robots_txt);
+        setCrawlerToggles(directivesToToggles(p.robots_txt));
       }
     }
     setLoading(false);
@@ -102,7 +173,8 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         seo_title: seoTitle,
         seo_description: seoDescription,
         og_image_url: ogImageUrl,
-        robots_txt: robotsDirectives as any,
+        twitter_handle: twitterHandle,
+        robots_txt: togglesToDirectives(crawlerToggles) as any,
       })
       .eq("user_id", user.id);
 
@@ -115,41 +187,18 @@ export default function SettingsTab({ user }: SettingsTabProps) {
     setSavingProfile(false);
   };
 
-  // ── Robots helpers ─────────────────────────────────────────────────────────
-  const addRobotGroup = () => {
-    setRobotsDirectives([...robotsDirectives, { userAgent: "*", rules: [{ action: "allow", path: "/" }] }]);
-  };
-  const removeRobotGroup = (i: number) => {
-    setRobotsDirectives(robotsDirectives.filter((_, idx) => idx !== i));
-  };
-  const updateRobotAgent = (i: number, agent: string) => {
-    const d = [...robotsDirectives];
-    d[i] = { ...d[i], userAgent: agent };
-    setRobotsDirectives(d);
-  };
-  const addRobotRule = (groupIdx: number) => {
-    const d = [...robotsDirectives];
-    d[groupIdx] = { ...d[groupIdx], rules: [...d[groupIdx].rules, { action: "allow", path: "/" }] };
-    setRobotsDirectives(d);
-  };
-  const removeRobotRule = (groupIdx: number, ruleIdx: number) => {
-    const d = [...robotsDirectives];
-    d[groupIdx] = { ...d[groupIdx], rules: d[groupIdx].rules.filter((_, i) => i !== ruleIdx) };
-    setRobotsDirectives(d);
-  };
-  const updateRobotRule = (groupIdx: number, ruleIdx: number, field: "action" | "path", value: string) => {
-    const d = [...robotsDirectives];
-    const rules = [...d[groupIdx].rules];
-    rules[ruleIdx] = { ...rules[ruleIdx], [field]: value };
-    d[groupIdx] = { ...d[groupIdx], rules };
-    setRobotsDirectives(d);
+  // ── Crawler toggle helper ───────────────────────────────────────────────────
+  const updateToggle = (key: keyof CrawlerToggles, val: boolean) => {
+    setCrawlerToggles((prev) => ({ ...prev, [key]: val }));
   };
 
-  const robotsTxtPreview = robotsDirectives.map((g) => {
-    const lines = [`User-agent: ${g.userAgent}`];
-    g.rules.forEach((r) => lines.push(`${r.action === "disallow" ? "Disallow" : "Allow"}: ${r.path}`));
-    return lines.join("\n");
-  }).join("\n\n");
+  const robotsTxtPreview = togglesToDirectives(crawlerToggles)
+    .map((g) => {
+      const lines = [`User-agent: ${g.userAgent}`];
+      g.rules.forEach((r) => lines.push(`${r.action === "disallow" ? "Disallow" : "Allow"}: ${r.path}`));
+      return lines.join("\n");
+    })
+    .join("\n\n");
 
   if (loading) {
     return (
@@ -187,8 +236,8 @@ export default function SettingsTab({ user }: SettingsTabProps) {
                   aria-checked={theme === opt.value}
                   onClick={() => setTheme(opt.value)}
                   className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${theme === opt.value
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border/30 bg-secondary/30 text-muted-foreground hover:bg-secondary/50"
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border/30 bg-secondary/30 text-muted-foreground hover:bg-secondary/50"
                     }`}
                 >
                   <opt.icon className="w-4 h-4" aria-hidden="true" />
@@ -211,8 +260,8 @@ export default function SettingsTab({ user }: SettingsTabProps) {
                   aria-label={color.name}
                   onClick={() => setAccentColor(color.name)}
                   className={`w-10 h-10 rounded-full ${color.bg} transition-all ${accentColor === color.name
-                      ? "ring-2 ring-offset-2 ring-offset-background ring-foreground scale-110"
-                      : "opacity-60 hover:opacity-100"
+                    ? "ring-2 ring-offset-2 ring-offset-background ring-foreground scale-110"
+                    : "opacity-60 hover:opacity-100"
                     }`}
                 />
               ))}
@@ -244,6 +293,16 @@ export default function SettingsTab({ user }: SettingsTabProps) {
             <Input id="og-image" value={ogImageUrl} onChange={(e) => setOgImageUrl(e.target.value)} placeholder="https://yoursite.com/og-card.png" />
             <p className="text-xs text-muted-foreground">Recommended 1200×630px. Used in Twitter/Facebook/LinkedIn link previews.</p>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="twitter-handle">Twitter / X Handle</Label>
+            <Input
+              id="twitter-handle"
+              value={twitterHandle}
+              onChange={(e) => setTwitterHandle(e.target.value)}
+              placeholder="@yourhandle"
+            />
+            <p className="text-xs text-muted-foreground">Used for the Twitter Card "via" attribution when your link is shared.</p>
+          </div>
           {ogImageUrl && (
             <div className="rounded-lg overflow-hidden border border-border/30 max-w-xs">
               <img src={ogImageUrl} alt="OG image preview" className="w-full h-auto" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -252,74 +311,70 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         </CardContent>
       </Card>
 
-      {/* ── robots.txt Editor ── */}
+      {/* ── Crawler Access (robots.txt) ── */}
       <Card className="bg-card/50 border-border/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-sans">
-            <Bot className="w-4 h-4 text-primary" aria-hidden="true" /> robots.txt
+            <Bot className="w-4 h-4 text-primary" aria-hidden="true" /> Crawler Access
           </CardTitle>
-          <CardDescription>Control which search engine crawlers can access your card. Each group targets a specific bot.</CardDescription>
+          <CardDescription>Control which bots can visit your card. This generates your robots.txt file automatically.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {robotsDirectives.map((group, gi) => (
-            <div key={gi} className="rounded-lg border border-border/20 bg-secondary/20 p-3 space-y-3">
-              <div className="flex items-center gap-2">
-                <Label htmlFor={`robot-agent-${gi}`} className="text-xs shrink-0">User-agent</Label>
-                <select
-                  id={`robot-agent-${gi}`}
-                  value={group.userAgent}
-                  onChange={(e) => updateRobotAgent(gi, e.target.value)}
-                  className="h-8 rounded-md border border-border/30 bg-secondary/60 px-2 text-sm text-foreground flex-1"
-                  aria-label={`User agent for group ${gi + 1}`}
-                >
-                  {USER_AGENTS.map((ua) => (
-                    <option key={ua} value={ua}>{ua}</option>
-                  ))}
-                </select>
-                {robotsDirectives.length > 1 && (
-                  <button type="button" onClick={() => removeRobotGroup(gi)} className="p-1 text-muted-foreground hover:text-destructive" aria-label={`Remove ${group.userAgent} group`}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              {group.rules.map((rule, ri) => (
-                <div key={ri} className="flex items-center gap-2 pl-4">
-                  <select
-                    value={rule.action}
-                    onChange={(e) => updateRobotRule(gi, ri, "action", e.target.value)}
-                    className="h-8 rounded-md border border-border/30 bg-secondary/60 px-2 text-xs text-foreground w-24"
-                    aria-label={`Action for rule ${ri + 1} of ${group.userAgent}`}
-                  >
-                    <option value="allow">Allow</option>
-                    <option value="disallow">Disallow</option>
-                  </select>
-                  <Input
-                    value={rule.path}
-                    onChange={(e) => updateRobotRule(gi, ri, "path", e.target.value)}
-                    className="h-8 text-xs bg-secondary/60 border-border/30 flex-1"
-                    placeholder="/path"
-                    aria-label={`Path for rule ${ri + 1} of ${group.userAgent}`}
-                  />
-                  {group.rules.length > 1 && (
-                    <button type="button" onClick={() => removeRobotRule(gi, ri)} className="p-1 text-muted-foreground hover:text-destructive" aria-label={`Remove rule ${ri + 1}`}>
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-              <Button variant="ghost" size="sm" onClick={() => addRobotRule(gi)} className="text-xs h-7 ml-4">
-                <Plus className="w-3 h-3 mr-1" /> Add Rule
-              </Button>
+        <CardContent className="space-y-5">
+          {/* Search engines */}
+          <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
+            <div className="space-y-1">
+              <Label htmlFor="toggle-search" className="text-sm font-medium text-foreground">
+                Allow search engines to index your card
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Let Google, Bing, and other search engines find and list your card in search results.
+              </p>
             </div>
-          ))}
-          <Button variant="outline" size="sm" onClick={addRobotGroup} className="w-full">
-            <Plus className="w-3.5 h-3.5 mr-1" /> Add User-Agent Group
-          </Button>
+            <Switch
+              id="toggle-search"
+              checked={crawlerToggles.searchEngines}
+              onCheckedChange={(val) => updateToggle("searchEngines", val)}
+            />
+          </div>
+
+          {/* Social previews */}
+          <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
+            <div className="space-y-1">
+              <Label htmlFor="toggle-social" className="text-sm font-medium text-foreground">
+                Allow social media link previews
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Let Twitter, Facebook, and LinkedIn generate a rich preview when someone shares your card link.
+              </p>
+            </div>
+            <Switch
+              id="toggle-social"
+              checked={crawlerToggles.socialPreviews}
+              onCheckedChange={(val) => updateToggle("socialPreviews", val)}
+            />
+          </div>
+
+          {/* AI bots */}
+          <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
+            <div className="space-y-1">
+              <Label htmlFor="toggle-ai" className="text-sm font-medium text-foreground">
+                Allow AI bots to read your content
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Let ChatGPT, Claude, and other AI services access your card content for training or responses.
+              </p>
+            </div>
+            <Switch
+              id="toggle-ai"
+              checked={crawlerToggles.aiBots}
+              onCheckedChange={(val) => updateToggle("aiBots", val)}
+            />
+          </div>
 
           {/* Preview */}
           <details className="mt-2">
             <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-              Preview rendered robots.txt
+              Preview generated robots.txt
             </summary>
             <pre className="mt-2 rounded-lg bg-black/40 p-3 text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto">
               {robotsTxtPreview}

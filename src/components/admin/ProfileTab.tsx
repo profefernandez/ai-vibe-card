@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiClient as db } from "@/lib/apiClient";
 import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, User as UserIcon, Plus, X, GripVertical, LayoutTemplate } from "lucide-react";
+import { Loader2, Save, User as UserIcon, Plus, X, LayoutTemplate, Upload, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 const PLATFORM_OPTIONS = [
@@ -63,6 +63,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -140,6 +143,53 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     const [moved] = updated.splice(from, 1);
     updated.splice(to, 0, moved);
     setProfile({ ...profile, social_links: updated });
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5 MB");
+      return;
+    }
+    setUploading(true);
+    const { url, error } = await db.upload.avatar(file);
+    if (error || !url) {
+      toast.error(error?.message || "Upload failed");
+    } else {
+      // Append cache-buster so the browser reloads the image
+      setProfile({ ...profile, avatar_url: `${url}?t=${Date.now()}` });
+      toast.success("Photo uploaded!");
+    }
+    setUploading(false);
+  };
+
+  const handleAvatarDelete = async () => {
+    setUploading(true);
+    const { error } = await db.upload.deleteAvatar();
+    if (error) {
+      toast.error(error.message || "Delete failed");
+    } else {
+      setProfile({ ...profile, avatar_url: "" });
+      toast.success("Photo removed");
+    }
+    setUploading(false);
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleAvatarUpload(file);
+    // Reset so the same file can be re-selected
+    e.target.value = "";
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleAvatarUpload(file);
   };
 
   if (loading) {
@@ -267,13 +317,69 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="avatar_url">Avatar URL</Label>
-              <Input
-                id="avatar_url"
-                value={profile.avatar_url}
-                onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })}
-                placeholder="https://example.com/avatar.png"
+              <Label>Profile Photo</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={onFileChange}
               />
+              {profile.avatar_url ? (
+                <div className="flex items-center gap-4 p-3 rounded-lg bg-secondary/50">
+                  <img
+                    src={profile.avatar_url}
+                    alt="Avatar preview"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-primary/30"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  <div className="flex flex-col gap-2 flex-1 min-w-0">
+                    <span className="text-sm text-muted-foreground truncate">Current photo</span>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Upload className="w-3 h-3 mr-1" />}
+                        Replace
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={uploading}
+                        onClick={handleAvatarDelete}
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" /> Remove
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${dragOver
+                      ? "border-primary bg-primary/10"
+                      : "border-border/50 bg-secondary/30 hover:border-primary/50 hover:bg-secondary/50"
+                    }`}
+                >
+                  {uploading ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  ) : (
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  )}
+                  <span className="text-sm text-muted-foreground text-center">
+                    {uploading ? "Uploading…" : "Click or drag & drop to upload"}
+                  </span>
+                  <span className="text-xs text-muted-foreground/60">JPEG, PNG, WebP, GIF — max 5 MB</span>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="cta_label">Button Label</Label>
@@ -309,18 +415,6 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               Paste a scheduling widget embed (Calendly, Cal.com, Acuity, etc.). When set, the CTA button opens the embed inside the card instead of linking out.
             </p>
           </div>
-
-          {profile.avatar_url && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50">
-              <img
-                src={profile.avatar_url}
-                alt="Avatar preview"
-                className="w-12 h-12 rounded-full object-cover border-2 border-primary/30"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-              <span className="text-sm text-muted-foreground">Avatar preview</span>
-            </div>
-          )}
         </CardContent>
       </Card>
 

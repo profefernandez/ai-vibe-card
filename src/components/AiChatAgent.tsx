@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Zap, Sparkles } from "lucide-react";
+import { apiClient as db } from "@/lib/apiClient";
 
 type Message = {
   role: "user" | "assistant";
@@ -11,43 +12,6 @@ interface AiChatAgentProps {
   initialMessage?: string | null;
   onMessageConsumed?: () => void;
 }
-
-const getAiResponse = (userMessage: string): string => {
-  const msg = userMessage.toLowerCase();
-
-  if (msg.includes("price") || msg.includes("cost") || msg.includes("how much")) {
-    return "Here are our service tiers:\n\n• **AI Literacy Workshop** — $497/session\n• **AI Agent Build** — $1,997 (one-time)\n• **Team Training** — $3,497/cohort\n• **VIP Strategy Day** — $4,997/day\n\nWould you like to book a free discovery call to discuss which option fits best?";
-  }
-  if (msg.includes("service") || msg.includes("offer") || msg.includes("what do you")) {
-    return "We offer four core services:\n\n1. **AI Literacy Workshop** — Learn the foundations of AI for social work\n2. **AI Agent Build** — Get a custom no-code AI agent built for your practice\n3. **Team Training** — A 6-week cohort program for organizations\n4. **VIP Strategy Day** — Full-day intensive planning session\n\nAll grounded in the NASW Code of Ethics. Want to learn more about any specific service?";
-  }
-  if (msg.includes("book") || msg.includes("call") || msg.includes("meeting") || msg.includes("schedule")) {
-    return "You can book a **free discovery call** by tapping the gold button at the top of the page. We'd love to chat about how AI can transform your social work practice. 📅";
-  }
-  if (msg.includes("contact") || msg.includes("email") || msg.includes("phone") || msg.includes("reach")) {
-    return "You can reach us at:\n\n📧 **hello@60wattsofclarity.com**\n📱 Via the social links above\n📅 Or book a free discovery call directly!\n\nWe typically respond within 24 hours.";
-  }
-  if (msg.includes("who") || msg.includes("tanya") || msg.includes("founder") || msg.includes("about")) {
-    return "**Tanya Williams** is the founder of 60 Watts of Clarity. She specializes in no-code AI agent training for social work professionals, helping them leverage AI tools ethically and effectively.";
-  }
-  if (msg.includes("literacy") || msg.includes("workshop")) {
-    return "The **AI Literacy Workshop** ($497/session) is perfect for teams new to AI. It covers:\n\n• What AI can and can't do\n• Ethical considerations in social work\n• Hands-on demos of AI tools\n• Q&A with Tanya\n\nWant to book a session for your team?";
-  }
-  if (msg.includes("agent build") || msg.includes("custom agent")) {
-    return "The **AI Agent Build** ($1,997 one-time) is our most popular service! Tanya builds a custom no-code AI agent tailored to your specific practice needs. You get:\n\n• Discovery session\n• Custom agent development\n• Training on how to use it\n• 30 days of support\n\nReady to get started?";
-  }
-  if (msg.includes("team training") || msg.includes("cohort")) {
-    return "The **Team Training** program ($3,497/cohort) is a 6-week intensive for organizations. Your team will:\n\n• Master AI literacy fundamentals\n• Build their own AI agents\n• Learn ethical deployment strategies\n• Get ongoing support\n\nPerfect for agencies with 5-15 team members.";
-  }
-  if (msg.includes("vip") || msg.includes("strategy day")) {
-    return "The **VIP Strategy Day** ($4,997/day) is our premium offering — a full-day intensive with Tanya where you'll:\n\n• Audit your current workflows\n• Map AI integration opportunities\n• Build your first agent live\n• Leave with a complete AI roadmap\n\nThis is for leaders who want to move fast.";
-  }
-  if (msg.includes("hello") || msg.includes("hi") || msg.includes("hey")) {
-    return "Hey there! 👋 Welcome to 60 Watts of Clarity. I'm here to help you learn about our AI consulting services for social work professionals. What would you like to know?";
-  }
-
-  return "Great question! For the most detailed answer, I'd recommend booking a **free discovery call** with Tanya. In the meantime, feel free to ask me about our services, pricing, or how to get started!";
-};
 
 const QUICK_PROMPTS = [
   "What services do you offer?",
@@ -65,6 +29,7 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

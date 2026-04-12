@@ -16,11 +16,18 @@
 
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
+import { router as uploadRouter } from "./routes/upload.js";
 import { db } from "./db.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -28,13 +35,34 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors({ origin: "*" }));
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(",").map((o) => o.trim())
+    : ["http://localhost:8080", "http://localhost:3001"];
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (server-to-server, curl, mobile apps)
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+}));
 app.use(express.json({ limit: "2mb" }));
 
+// Rate limiters
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, please try again later" } });
+const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many requests, please slow down" } });
+
+// ── Static file serving for uploaded avatars ──────────────────────────────────
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/tables", tablesRouter);
+app.use("/api/functions/lemonade-chat", chatLimiter);
 app.use("/api/functions", functionsRouter);
+app.use("/api/upload", uploadRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => res.json({ ok: true }));

@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     seo_title     TEXT        NOT NULL DEFAULT '',
     seo_description TEXT      NOT NULL DEFAULT '',
     og_image_url  TEXT        NOT NULL DEFAULT '',
+    twitter_handle TEXT       NOT NULL DEFAULT '',
     robots_txt    JSONB       NOT NULL DEFAULT '[{"userAgent":"*","rules":[{"action":"allow","path":"/"}]}]',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),

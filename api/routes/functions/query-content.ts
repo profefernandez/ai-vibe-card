@@ -19,20 +19,19 @@ export async function handler(req: Request, res: Response): Promise<void> {
             res.status(400).json({ success: false, error: "query is required" });
             return;
         }
-
-        // Fetch content blocks
-        const params: unknown[] = [];
-        let sql = `
-      SELECT id, heading, body, images, category, tags, block_order, page_id
-      FROM content_blocks
-    `;
-        if (site_id) {
-            params.push(site_id);
-            sql += ` WHERE site_id = $1`;
+        if (!site_id) {
+            res.status(400).json({ success: false, error: "site_id is required" });
+            return;
         }
-        sql += ` ORDER BY block_order LIMIT 200`;
 
-        const { rows: blocks } = await db.query(sql, params);
+        // Fetch content blocks scoped to the requested site
+        const { rows: blocks } = await db.query(
+            `SELECT id, heading, body, images, category, tags, block_order, page_id
+             FROM content_blocks
+             WHERE site_id = $1
+             ORDER BY block_order LIMIT 200`,
+            [site_id],
+        );
 
         if (!blocks.length) {
             res.json({ success: true, blocks: [], message: "No content available yet" });

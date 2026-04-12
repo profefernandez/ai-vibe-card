@@ -38,14 +38,34 @@ const ALLOWED_TABLES = new Set([
 
 // ── Column allowlist per table (prevents arbitrary column injection) ───────────
 // All non-listed columns are stripped on INSERT/UPDATE.
+// "id" is always safe to read but never writable.
 const TABLE_COLUMNS: Record<string, string[]> = {
-    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "robots_txt", "updated_at"],
+    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "updated_at"],
     sites: ["user_id", "domain", "name", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
     received_cards: ["owner_id", "sender_name", "sender_domain", "sender_avatar", "sender_tagline", "notes", "usage_count", "usage_limit"],
+};
+
+// Readable columns include "id" and "created_at" in addition to writable columns
+function getReadableColumns(table: string): Set<string> {
+    const cols = TABLE_COLUMNS[table] ?? [];
+    return new Set([...cols, "id", "created_at"]);
+}
+
+// ── Ownership column per table ────────────────────────────────────────────────
+// Maps each table to the column that identifies the owning user.
+// Used to enforce that authenticated users can only access their own data.
+const OWNER_COLUMN: Record<string, string> = {
+    profiles: "user_id",
+    sites: "user_id",
+    site_pages: "", // owned indirectly via sites
+    content_blocks: "", // owned indirectly via sites
+    ai_preferences: "user_id",
+    api_connections: "user_id",
+    received_cards: "owner_id",
 };
 
 function validateTable(table: string, res: any): boolean {
@@ -56,8 +76,14 @@ function validateTable(table: string, res: any): boolean {
     return true;
 }
 
-/** Parse ?filter=col=eq.value into WHERE clauses */
-function parseFilters(rawFilters: string | string[] | undefined): {
+/** Check if a column name is in the allowlist for the given table */
+function isAllowedColumn(table: string, col: string): boolean {
+    const allowed = TABLE_COLUMNS[table];
+    return !!allowed && (allowed.includes(col) || col === "id" || col === "created_at");
+}
+
+/** Parse ?filter=col=eq.value into WHERE clauses (validates columns against allowlist) */
+function parseFilters(table: string, rawFilters: string | string[] | undefined): {
     clauses: string[];
     values: unknown[];
 } {
@@ -70,7 +96,7 @@ function parseFilters(rawFilters: string | string[] | undefined): {
     const values: unknown[] = [];
     for (const f of filters) {
         const m = f.match(/^([a-zA-Z_]+)=eq\.(.+)$/);
-        if (m) {
+        if (m && isAllowedColumn(table, m[1])) {
             values.push(m[2]);
             clauses.push(`"${m[1]}" = $${values.length}`);
         }
@@ -84,23 +110,44 @@ function pickColumns(table: string, data: Record<string, unknown>): Record<strin
     return Object.fromEntries(Object.entries(data).filter(([k]) => allowed.includes(k)));
 }
 
+/** Get the ownership column for a table (if any) */
+function ownerColumn(table: string): string | null {
+    if (["profiles", "sites", "ai_preferences", "api_connections"].includes(table)) return "user_id";
+    if (table === "received_cards") return "owner_id";
+    // site_pages and content_blocks use site_id — ownership verified via site table
+    return null;
+}
+
 // ── SELECT ─────────────────────────────────────────────────────────────────────
 router.get("/:table", async (req, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 
     const { filter, order, limit, select } = req.query as Record<string, string | string[]>;
-    const { clauses, values } = parseFilters(filter);
+    const { clauses, values } = parseFilters(table, filter);
 
-    const cols = typeof select === "string"
-        ? select.split(",").map((c) => `"${c.trim()}"`).join(", ")
-        : "*";
+    // Validate select columns against allowlist
+    let cols = "*";
+    if (typeof select === "string") {
+        const requested = select.split(",").map((c) => c.trim());
+        const valid = requested.filter((c) => isAllowedColumn(table, c));
+        if (valid.length === 0) {
+            res.status(400).json({ error: "No valid columns in select" });
+            return;
+        }
+        cols = valid.map((c) => `"${c}"`).join(", ");
+    }
 
     let sql = `SELECT ${cols} FROM "${table}"`;
     if (clauses.length) sql += ` WHERE ${clauses.join(" AND ")}`;
 
+    // Validate order column against allowlist
     if (typeof order === "string") {
         const [col, dir] = order.split(".");
+        if (!isAllowedColumn(table, col)) {
+            res.status(400).json({ error: "Invalid order column" });
+            return;
+        }
         sql += ` ORDER BY "${col}" ${dir === "desc" ? "DESC" : "ASC"}`;
     }
     if (typeof limit === "string" && /^\d+$/.test(limit)) {
@@ -123,7 +170,14 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
 
     const raw = req.body as Record<string, unknown> | Record<string, unknown>[];
     const rows = Array.isArray(raw) ? raw : [raw];
-    const cleaned = rows.map((r) => pickColumns(table, r));
+
+    // Force ownership column to authenticated user
+    const ownCol = ownerColumn(table);
+    const cleaned = rows.map((r) => {
+        const c = pickColumns(table, r);
+        if (ownCol) c[ownCol] = req.user!.id;
+        return c;
+    });
     if (cleaned.length === 0 || Object.keys(cleaned[0]).length === 0) {
         res.status(400).json({ error: "No valid columns provided" });
         return;
@@ -152,10 +206,17 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
     if (!validateTable(table, res)) return;
 
     const { filter } = req.query as Record<string, string | string[]>;
-    const { clauses, values } = parseFilters(filter);
+    const { clauses, values } = parseFilters(table, filter);
     if (clauses.length === 0) {
         res.status(400).json({ error: "At least one filter is required for UPDATE" });
         return;
+    }
+
+    // Enforce ownership — user can only update their own rows
+    const ownCol = ownerColumn(table);
+    if (ownCol) {
+        values.push(req.user!.id);
+        clauses.push(`"${ownCol}" = $${values.length}`);
     }
 
     const cleaned = pickColumns(table, req.body as Record<string, unknown>);
@@ -185,10 +246,17 @@ router.delete("/:table", requireAuth, async (req: AuthRequest, res) => {
     if (!validateTable(table, res)) return;
 
     const { filter } = req.query as Record<string, string | string[]>;
-    const { clauses, values } = parseFilters(filter);
+    const { clauses, values } = parseFilters(table, filter);
     if (clauses.length === 0) {
         res.status(400).json({ error: "At least one filter is required for DELETE" });
         return;
+    }
+
+    // Enforce ownership — user can only delete their own rows
+    const ownCol = ownerColumn(table);
+    if (ownCol) {
+        values.push(req.user!.id);
+        clauses.push(`"${ownCol}" = $${values.length}`);
     }
 
     const sql = `DELETE FROM "${table}" WHERE ${clauses.join(" AND ")}`;
@@ -216,6 +284,11 @@ router.post("/:table/upsert", requireAuth, async (req: AuthRequest, res) => {
     }
 
     const cleaned = pickColumns(table, data);
+
+    // Force ownership column to authenticated user
+    const ownCol = ownerColumn(table);
+    if (ownCol) cleaned[ownCol] = req.user!.id;
+
     const colNames = Object.keys(cleaned);
     if (colNames.length === 0) {
         res.status(400).json({ error: "No valid columns provided" });
@@ -226,7 +299,8 @@ router.post("/:table/upsert", requireAuth, async (req: AuthRequest, res) => {
     const valPlaceholders = colNames.map((_, i) => `$${i + 1}`).join(", ");
     const flatValues = colNames.map((c) => cleaned[c]);
 
-    const conflictCol = typeof onConflict === "string" && /^[a-zA-Z_]+$/.test(onConflict)
+    // Validate onConflict column against allowlist
+    const conflictCol = typeof onConflict === "string" && isAllowedColumn(table, onConflict)
         ? `"${onConflict}"`
         : '"id"';
 

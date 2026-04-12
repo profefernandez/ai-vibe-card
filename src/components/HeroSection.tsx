@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
+import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import type { SocialLink } from "./SocialLinks";
@@ -64,19 +65,29 @@ const HeroSection = () => {
           applyTheme(data.theme || "dark", data.accent_color || "amber");
 
           // Apply SEO / Open Graph meta tags dynamically
-          if (data.seo_title) document.title = data.seo_title;
+          if (data.seo_title) {
+            document.title = data.seo_title;
+            setMetaTag("og:title", data.seo_title, true);
+            setMetaTag("twitter:title", data.seo_title);
+          }
           if (data.seo_description) {
             setMetaTag("description", data.seo_description);
             setMetaTag("og:description", data.seo_description, true);
             setMetaTag("twitter:description", data.seo_description);
           }
-          if (data.seo_title) {
-            setMetaTag("og:title", data.seo_title, true);
-          }
           if (data.og_image_url) {
             setMetaTag("og:image", data.og_image_url, true);
             setMetaTag("twitter:image", data.og_image_url);
           }
+          if (data.twitter_handle) {
+            const handle = data.twitter_handle.startsWith("@")
+              ? data.twitter_handle
+              : `@${data.twitter_handle}`;
+            setMetaTag("twitter:site", handle);
+          }
+          setMetaTag("og:url", window.location.href, true);
+          setMetaTag("og:type", "website", true);
+          setMetaTag("twitter:card", "summary_large_image");
         }
       });
   }, []);
@@ -344,7 +355,7 @@ const HeroSection = () => {
 
                 <div
                   className="flex-1 w-full h-full min-h-[60vh] p-4 pt-14 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:min-h-[55vh] [&>iframe]:border-0 [&>iframe]:rounded-xl"
-                  dangerouslySetInnerHTML={{ __html: ctaEmbed }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ctaEmbed, { ADD_TAGS: ["iframe"], ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling"] }) }}
                 />
               </motion.div>
             )}

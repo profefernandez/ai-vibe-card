@@ -13,12 +13,19 @@ export const router = Router();
 
 const SALT_ROUNDS = 12;
 const TOKEN_TTL = "7d";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Pre-hashed dummy for constant-time comparison on non-existent users
+const DUMMY_HASH = "$2b$12$LJ3m4ys3Lg7P4ofMrYBZqe1a4oXMKm0JZnSIpOOmQbOeYXXxHBqS6";
 
 router.post("/register", async (req, res) => {
     const { email, password } = req.body as { email?: string; password?: string };
 
-    if (!email || !password || password.length < 6) {
-        res.status(400).json({ error: "Email and password (min 6 chars) are required" });
+    if (!email || !password || password.length < 8) {
+        res.status(400).json({ error: "Email and password (min 8 chars) are required" });
+        return;
+    }
+    if (!EMAIL_RE.test(email)) {
+        res.status(400).json({ error: "Invalid email format" });
         return;
     }
 
@@ -66,7 +73,11 @@ router.post("/login", async (req, res) => {
             | { id: string; email: string; password_hash: string }
             | undefined;
 
-        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+        // Always run bcrypt.compare to prevent timing-based user enumeration
+        const hashToCheck = user?.password_hash ?? DUMMY_HASH;
+        const valid = await bcrypt.compare(password, hashToCheck);
+
+        if (!user || !valid) {
             res.status(401).json({ error: "Invalid email or password" });
             return;
         }

@@ -73,6 +73,30 @@ export async function handler(req: Request, res: Response): Promise<void> {
         return;
     }
 
+    // SSRF protection — validate URL before sending to Firecrawl
+    let formattedUrl = domain.trim();
+    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+        formattedUrl = `https://${formattedUrl}`;
+    }
+    let parsedUrl: URL;
+    try {
+        parsedUrl = new URL(formattedUrl);
+    } catch {
+        res.status(400).json({ success: false, error: "Invalid URL" });
+        return;
+    }
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        res.status(400).json({ success: false, error: "Only http/https URLs are allowed" });
+        return;
+    }
+    // Block private/internal IPs
+    const hostname = parsedUrl.hostname;
+    const privatePatterns = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|0\.|169\.254\.|::1|localhost|fc00|fd00|fe80)/i;
+    if (privatePatterns.test(hostname)) {
+        res.status(400).json({ success: false, error: "Internal/private addresses are not allowed" });
+        return;
+    }
+
     const apiKey = process.env.FIRECRAWL_API_KEY;
     if (!apiKey) {
         res.status(500).json({ success: false, error: "Firecrawl connector not configured" });
@@ -87,11 +111,6 @@ export async function handler(req: Request, res: Response): Promise<void> {
     if (!siteCheck.rows.length) {
         res.status(403).json({ success: false, error: "Forbidden" });
         return;
-    }
-
-    let formattedUrl = domain.trim();
-    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-        formattedUrl = `https://${formattedUrl}`;
     }
 
     await db.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site_id]);
