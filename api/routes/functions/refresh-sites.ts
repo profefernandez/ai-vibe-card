@@ -13,6 +13,8 @@
 import type { Request, Response } from "express";
 import { db } from "../../db.js";
 import { handler as scrapeSiteHandler } from "./scrape-site.js";
+import { sanitizeContent } from "../../lib/sanitize-content.js";
+import { promises as dns } from "node:dns";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {
@@ -29,10 +31,12 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
 
         // Find sites that are stale: never scraped or last_scraped_at older than refresh_interval_hours
+        // Only refresh verified sites
         const { rows: staleSites } = await db.query(`
-            SELECT id, domain, user_id
+            SELECT id, domain, user_id, verification_token, verification_method
             FROM sites
-            WHERE scrape_status != 'scraping'
+            WHERE verified = TRUE
+              AND scrape_status != 'scraping'
               AND (
                 last_scraped_at IS NULL
                 OR last_scraped_at < NOW() - (refresh_interval_hours || ' hours')::INTERVAL
@@ -50,6 +54,17 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
         for (const site of staleSites) {
             try {
+                // Re-verify domain ownership before refreshing
+                const stillVerified = await reVerifyDomain(site.domain, site.verification_token, site.verification_method);
+                if (!stillVerified) {
+                    await db.query(
+                        "UPDATE sites SET verified = FALSE, updated_at = NOW() WHERE id = $1",
+                        [site.id],
+                    );
+                    results.push({ id: site.id, domain: site.domain, status: "verification_lapsed" });
+                    continue;
+                }
+
                 // Build a fake request with the site owner's JWT-like context
                 // We call the DB directly instead of going through the HTTP handler
                 // to avoid needing per-user JWTs.
@@ -138,7 +153,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                         await db.query(
                             `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
                              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [site.id, pageId, b.heading, b.body, b.images, b.category, j],
+                            [site.id, pageId, sanitizeContent(b.heading), sanitizeContent(b.body), b.images, b.category, j],
                         );
                         totalBlocks++;
                     }
@@ -167,6 +182,54 @@ export async function handler(req: Request, res: Response): Promise<void> {
     } catch (err) {
         console.error("refresh-sites error:", err);
         res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });
+    }
+}
+
+// ── Re-verification helper ──────────────────────────────────────────────────
+
+async function reVerifyDomain(
+    rawDomain: string,
+    token: string | null,
+    method: string | null,
+): Promise<boolean> {
+    if (!token) return false;
+
+    let domain = rawDomain.trim();
+    try {
+        const url = new URL(domain.startsWith("http") ? domain : `https://${domain}`);
+        domain = url.hostname;
+    } catch {
+        return false;
+    }
+
+    // Prefer the method used for original verification; fall back to DNS TXT
+    if (method === "meta_tag") {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10_000);
+            const resp = await fetch(`https://${domain}`, {
+                headers: { "User-Agent": "60WattVerifyBot/1.0" },
+                signal: controller.signal,
+                redirect: "follow",
+            });
+            clearTimeout(timeout);
+            if (!resp.ok) return false;
+            const html = await resp.text();
+            const pattern = /<meta\s+[^>]*name\s*=\s*["']60watt-verify["'][^>]*content\s*=\s*["']([^"']+)["'][^>]*\/?>/i;
+            const altPattern = /<meta\s+[^>]*content\s*=\s*["']([^"']+)["'][^>]*name\s*=\s*["']60watt-verify["'][^>]*\/?>/i;
+            const match = html.match(pattern) || html.match(altPattern);
+            return match?.[1] === token;
+        } catch {
+            return false;
+        }
+    }
+
+    // Default: DNS TXT
+    try {
+        const records = await dns.resolveTxt(`_60watt-verify.${domain}`);
+        return records.some((parts) => parts.join("") === token);
+    } catch {
+        return false;
     }
 }
 

@@ -23,6 +23,7 @@ import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { encrypt } from "../lib/crypto.js";
+import { randomUUID } from "node:crypto";
 
 export const router = Router();
 
@@ -42,7 +43,7 @@ const ALLOWED_TABLES = new Set([
 // "id" is always safe to read but never writable.
 const TABLE_COLUMNS: Record<string, string[]> = {
     profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "updated_at"],
-    sites: ["user_id", "domain", "name", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
+    sites: ["user_id", "domain", "name", "verified", "verification_token", "verification_method", "verified_at", "verification_expires_at", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
@@ -178,6 +179,13 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
         // Encrypt API keys before storage
         if (table === "api_connections" && typeof c.api_key_encrypted === "string" && c.api_key_encrypted) {
             c.api_key_encrypted = encrypt(c.api_key_encrypted);
+        }
+        // Auto-generate verification token for new sites
+        if (table === "sites") {
+            c.verification_token = randomUUID();
+            const expires = new Date();
+            expires.setDate(expires.getDate() + 7);
+            c.verification_expires_at = expires.toISOString();
         }
         return c;
     });

@@ -40,10 +40,17 @@ export interface Profile {
 
 export type ScrapeStatus = "pending" | "scraping" | "done" | "error";
 
+export type VerificationMethod = "dns_txt" | "meta_tag";
+
 export interface Site {
     id: string;
     domain: string;
     name: string | null;
+    verified: boolean;
+    verification_token: string | null;
+    verification_method: VerificationMethod | null;
+    verified_at: string | null;
+    verification_expires_at: string | null;
     scrape_status: string;
     page_count: number;
     share_usage_limit: number;

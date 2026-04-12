@@ -11,6 +11,7 @@ import type { Response } from "express";
 import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
+import { sanitizeContent } from "../../lib/sanitize-content.js";
 
 type Block = {
     heading: string | null;
@@ -92,12 +93,16 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
     }
 
     // Verify the site belongs to the requesting user
-    const siteCheck = await db.query("SELECT id FROM sites WHERE id = $1 AND user_id = $2", [
+    const siteCheck = await db.query("SELECT id, verified FROM sites WHERE id = $1 AND user_id = $2", [
         site_id,
         user.id,
     ]);
     if (!siteCheck.rows.length) {
         res.status(403).json({ success: false, error: "Forbidden" });
+        return;
+    }
+    if (!siteCheck.rows[0].verified) {
+        res.status(403).json({ success: false, error: "Domain must be verified before scraping" });
         return;
     }
 
@@ -186,7 +191,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
                 await db.query(
                     `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [site_id, pageId, b.heading, b.body, b.images, b.category, i],
+                    [site_id, pageId, sanitizeContent(b.heading), sanitizeContent(b.body), b.images, b.category, i],
                 );
                 totalBlocks++;
             }

@@ -172,18 +172,25 @@ CREATE TRIGGER trg_profiles_updated_at
 -- SITES  (imported websites)
 -- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sites (
-    id                UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id           UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    domain            TEXT        NOT NULL,
-    name              TEXT        DEFAULT NULL,
-    scrape_status     TEXT        NOT NULL DEFAULT 'pending'
-                          CHECK (scrape_status IN ('pending', 'scraping', 'completed', 'error')),
-    page_count        INTEGER     NOT NULL DEFAULT 0  CHECK (page_count >= 0),
-    share_usage_limit INTEGER     NOT NULL DEFAULT 10 CHECK (share_usage_limit >= 0),
+    id                     UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id                UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    domain                 TEXT        NOT NULL,
+    name                   TEXT        DEFAULT NULL,
+    verified               BOOLEAN     NOT NULL DEFAULT FALSE,
+    verification_token     TEXT        DEFAULT NULL,
+    verification_method    TEXT        DEFAULT NULL
+                               CHECK (verification_method IN ('dns_txt', 'meta_tag')),
+    verified_at            TIMESTAMPTZ DEFAULT NULL,
+    verification_expires_at TIMESTAMPTZ DEFAULT NULL,
+    scrape_status          TEXT        NOT NULL DEFAULT 'pending'
+                               CHECK (scrape_status IN ('pending', 'scraping', 'completed', 'error')),
+    page_count             INTEGER     NOT NULL DEFAULT 0  CHECK (page_count >= 0),
+    share_usage_limit      INTEGER     NOT NULL DEFAULT 10 CHECK (share_usage_limit >= 0),
     last_scraped_at        TIMESTAMPTZ DEFAULT NULL,
     refresh_interval_hours INTEGER     NOT NULL DEFAULT 24 CHECK (refresh_interval_hours >= 1),
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_sites_user_domain UNIQUE (user_id, domain)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sites_user   ON sites (user_id);

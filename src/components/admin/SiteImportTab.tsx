@@ -4,8 +4,9 @@ import type { User, Site, ContentBlock } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Loader2, CheckCircle, XCircle, Trash2, RefreshCw } from "lucide-react";
+import { Globe, Loader2, CheckCircle, XCircle, Trash2, RefreshCw, ShieldCheck, ShieldAlert, Copy } from "lucide-react";
 import { timeAgo } from "@/lib/formatters";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SiteImportTabProps {
   user: User;
@@ -18,6 +19,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
   const [siteName, setSiteName] = useState("");
   const [scraping, setScraping] = useState(false);
   const [rescrapingId, setRescrapingId] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const { toast } = useToast();
@@ -45,25 +47,60 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
 
       if (siteError) throw siteError;
 
-      toast({ title: "Scraping started", description: `Importing ${domain}...` });
-      fetchSites();
-
-      const { data, error } = await db.functions.invoke("scrape-site", {
-        body: { domain: domain.trim(), site_id: (site as Site).id },
+      toast({
+        title: "Site added",
+        description: "Verify domain ownership before importing content.",
       });
-
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-
-      toast({ title: "Import complete!", description: `${data.pages} pages, ${data.blocks} content blocks imported.` });
       setDomain("");
       setSiteName("");
+      setSelectedSite((site as Site).id);
       fetchSites();
     } catch (err: any) {
-      toast({ title: "Import failed", description: err.message, variant: "destructive" });
-      fetchSites();
+      toast({ title: "Failed to add site", description: err.message, variant: "destructive" });
     } finally {
       setScraping(false);
+    }
+  };
+
+  const handleVerify = async (siteId: string, method: "dns_txt" | "meta_tag") => {
+    setVerifyingId(siteId);
+    try {
+      const { data, error } = await db.functions.invoke("verify-domain", {
+        body: { site_id: siteId, method },
+      });
+      if (error) throw error;
+      const result = data as { success: boolean; detail?: string; already_verified?: boolean };
+      if (result.success) {
+        toast({ title: "Domain verified!", description: result.detail || "You can now import content." });
+        fetchSites();
+      } else {
+        toast({ title: "Verification failed", description: result.detail || "Check your setup and try again.", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Verification error", description: err.message, variant: "destructive" });
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
+  const handleScrape = async (siteId: string, siteDomain: string) => {
+    setRescrapingId(siteId);
+    try {
+      toast({ title: "Scraping started", description: `Importing ${siteDomain}...` });
+      const { data, error } = await db.functions.invoke("scrape-site", {
+        body: { domain: siteDomain, site_id: siteId },
+      });
+      if (error) throw error;
+      const result = data as { success: boolean; pages?: number; blocks?: number; error?: string };
+      if (!result.success) throw new Error(result.error);
+      toast({ title: "Import complete!", description: `${result.pages} pages, ${result.blocks} content blocks imported.` });
+      fetchSites();
+      if (selectedSite === siteId) fetchBlocks(siteId);
+    } catch (err: any) {
+      toast({ title: "Scrape failed", description: err.message, variant: "destructive" });
+      fetchSites();
+    } finally {
+      setRescrapingId(null);
     }
   };
 
@@ -77,25 +114,12 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
     toast({ title: "Site deleted" });
   };
 
-  const handleRescrape = async (siteId: string, siteDomain: string) => {
-    setRescrapingId(siteId);
-    try {
-      toast({ title: "Re-scraping started", description: `Refreshing ${siteDomain}...` });
-      const { data, error } = await db.functions.invoke("scrape-site", {
-        body: { domain: siteDomain, site_id: siteId },
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      toast({ title: "Re-scrape complete!", description: `${data.pages} pages, ${data.blocks} content blocks refreshed.` });
-      fetchSites();
-      if (selectedSite === siteId) fetchBlocks(siteId);
-    } catch (err: any) {
-      toast({ title: "Re-scrape failed", description: err.message, variant: "destructive" });
-      fetchSites();
-    } finally {
-      setRescrapingId(null);
-    }
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied to clipboard" });
   };
+
+  const selectedSiteData = sites.find((s) => s.id === selectedSite);
 
   return (
     <div className="space-y-6">
@@ -105,7 +129,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
           <Globe className="w-5 h-5 text-primary" /> Import Website
         </h2>
         <p className="text-sm text-muted-foreground">
-          Enter a domain to scrape and import its content. The AI will use this to answer visitor queries.
+          Enter a domain to import. You'll need to verify ownership before content is scraped.
         </p>
         <form onSubmit={handleImport} className="flex flex-col sm:flex-row gap-3">
           <div>
@@ -130,10 +154,91 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
             />
           </div>
           <Button type="submit" disabled={scraping || !domain.trim()}>
-            {scraping ? <><Loader2 className="w-4 h-4 animate-spin mr-1" aria-hidden="true" /> Scraping...</> : "Import Site"}
+            {scraping ? <><Loader2 className="w-4 h-4 animate-spin mr-1" aria-hidden="true" /> Adding...</> : "Add Site"}
           </Button>
         </form>
       </div>
+
+      {/* Verification panel for selected unverified site */}
+      {selectedSiteData && !selectedSiteData.verified && selectedSiteData.verification_token && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-500" /> Verify Domain Ownership
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Prove you own <strong>{selectedSiteData.domain}</strong> using one of these methods. Verification is required before importing content.
+          </p>
+
+          <Tabs defaultValue="dns_txt" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="dns_txt">DNS TXT Record</TabsTrigger>
+              <TabsTrigger value="meta_tag">HTML Meta Tag</TabsTrigger>
+            </TabsList>
+            <TabsContent value="dns_txt" className="space-y-3 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Add a TXT record to your domain's DNS settings:
+              </p>
+              <div className="rounded-lg bg-secondary/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Host/Name</p>
+                    <code className="text-sm text-foreground">_60watt-verify</code>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard("_60watt-verify")} aria-label="Copy host">
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Value</p>
+                    <code className="text-sm text-foreground break-all">{selectedSiteData.verification_token}</code>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => copyToClipboard(selectedSiteData.verification_token!)} aria-label="Copy token">
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Type: TXT &middot; TTL: 300 (or default)</p>
+              </div>
+              <Button
+                onClick={() => handleVerify(selectedSiteData.id, "dns_txt")}
+                disabled={verifyingId === selectedSiteData.id}
+              >
+                {verifyingId === selectedSiteData.id
+                  ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Checking...</>
+                  : "Check DNS Verification"}
+              </Button>
+            </TabsContent>
+            <TabsContent value="meta_tag" className="space-y-3 mt-4">
+              <p className="text-sm text-muted-foreground">
+                Add this meta tag to the <code>&lt;head&gt;</code> of your homepage:
+              </p>
+              <div className="rounded-lg bg-secondary/60 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <code className="text-sm text-foreground break-all">
+                    {`<meta name="60watt-verify" content="${selectedSiteData.verification_token}" />`}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => copyToClipboard(`<meta name="60watt-verify" content="${selectedSiteData.verification_token}" />`)}
+                    aria-label="Copy meta tag"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+              <Button
+                onClick={() => handleVerify(selectedSiteData.id, "meta_tag")}
+                disabled={verifyingId === selectedSiteData.id}
+              >
+                {verifyingId === selectedSiteData.id
+                  ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Checking...</>
+                  : "Check Meta Tag Verification"}
+              </Button>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
 
       {/* Sites list */}
       <div className="space-y-3">
@@ -152,23 +257,25 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
                   : "border-border/30 bg-card/30 hover:bg-card/50"
                   }`}
                 aria-pressed={selectedSite === site.id}
-                aria-label={`${site.name || site.domain}, ${site.page_count} pages, status: ${site.scrape_status}`}
+                aria-label={`${site.name || site.domain}, ${site.page_count} pages, status: ${site.scrape_status}, ${site.verified ? "verified" : "unverified"}`}
                 onClick={() => {
                   const next = selectedSite === site.id ? null : site.id;
                   setSelectedSite(next);
-                  if (next) fetchBlocks(next);
+                  if (next && site.verified) fetchBlocks(next);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     const next = selectedSite === site.id ? null : site.id;
                     setSelectedSite(next);
-                    if (next) fetchBlocks(next);
+                    if (next && site.verified) fetchBlocks(next);
                   }
                 }}
               >
                 <div className="flex items-center gap-3">
-                  {site.scrape_status === "completed" ? (
+                  {!site.verified ? (
+                    <><ShieldAlert className="w-5 h-5 text-amber-500" aria-hidden="true" /><span className="sr-only">Status: unverified</span></>
+                  ) : site.scrape_status === "completed" ? (
                     <><CheckCircle className="w-5 h-5 text-green-500" aria-hidden="true" /><span className="sr-only">Status: completed</span></>
                   ) : site.scrape_status === "scraping" ? (
                     <><Loader2 className="w-5 h-5 animate-spin text-primary" aria-hidden="true" /><span className="sr-only">Status: scraping</span></>
@@ -178,21 +285,28 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
                     <><Globe className="w-5 h-5 text-muted-foreground" aria-hidden="true" /><span className="sr-only">Status: pending</span></>
                   )}
                   <div>
-                    <p className="text-sm font-medium text-foreground">{site.name || site.domain}</p>
-                    <p className="text-xs text-muted-foreground">{site.domain} · {site.page_count} pages · Scraped {timeAgo(site.last_scraped_at)}</p>
+                    <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      {site.name || site.domain}
+                      {site.verified && <ShieldCheck className="w-3.5 h-3.5 text-green-500" aria-label="Verified" />}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {site.domain} · {site.verified ? `${site.page_count} pages · Scraped ${timeAgo(site.last_scraped_at)}` : "Awaiting verification"}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => { e.stopPropagation(); handleRescrape(site.id, site.domain); }}
-                    disabled={rescrapingId === site.id}
-                    className="text-muted-foreground hover:text-primary"
-                    aria-label={`Re-scrape ${site.name || site.domain}`}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${rescrapingId === site.id ? "animate-spin" : ""}`} />
-                  </Button>
+                  {site.verified && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => { e.stopPropagation(); handleScrape(site.id, site.domain); }}
+                      disabled={rescrapingId === site.id}
+                      className="text-muted-foreground hover:text-primary"
+                      aria-label={`${site.page_count > 0 ? "Re-scrape" : "Scrape"} ${site.name || site.domain}`}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${rescrapingId === site.id ? "animate-spin" : ""}`} />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -210,11 +324,11 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
       </div>
 
       {/* Content blocks preview */}
-      {selectedSite && (
+      {selectedSite && selectedSiteData?.verified && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-foreground">Content Blocks ({blocks.length})</h2>
           {blocks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No content blocks yet. Site may still be processing.</p>
+            <p className="text-sm text-muted-foreground">No content blocks yet. Click the refresh button to scrape the site.</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {blocks.map((block) => (
