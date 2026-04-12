@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Brain, Plus, X, Save } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 
 const STYLES = ["friendly", "professional", "casual", "formal"];
 
@@ -28,7 +28,7 @@ const AiTrainingTab = ({ user }: AiTrainingTabProps) => {
   }, []);
 
   const fetchPreferences = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("ai_preferences")
       .select("*")
       .eq("user_id", user.id)
@@ -55,16 +55,16 @@ const AiTrainingTab = ({ user }: AiTrainingTabProps) => {
     };
 
     // Upsert
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("ai_preferences")
       .select("id")
       .eq("user_id", user.id)
       .maybeSingle();
 
     if (existing) {
-      await supabase.from("ai_preferences").update(payload).eq("id", existing.id);
+      await db.from("ai_preferences").update(payload).eq("id", existing.id);
     } else {
-      await supabase.from("ai_preferences").insert(payload);
+      await db.from("ai_preferences").insert(payload);
     }
 
     setSaving(false);

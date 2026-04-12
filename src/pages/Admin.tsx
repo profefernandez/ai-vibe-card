@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Loader2, LogOut } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
+import { Loader2, LogOut, ExternalLink } from "lucide-react";
 
 import AdminSidebar, { type AdminSection } from "@/components/admin/AdminSidebar";
 import SiteImportTab from "@/components/admin/SiteImportTab";
@@ -22,6 +22,7 @@ type Site = {
   scrape_status: string;
   page_count: number;
   share_usage_limit: number;
+  last_scraped_at: string | null;
   created_at: string;
 };
 
@@ -43,12 +44,22 @@ const Admin = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (!session?.user) navigate("/auth");
+    // DEV BYPASS: skip auth entirely when API is not running
+    if (!import.meta.env.PROD) {
+      setUser({ id: "dev-user", email: "dev@localhost" });
+      setLoading(false);
+      return;
+    }
+
+    const { data: { subscription } } = db.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        navigate("/auth");
+      }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    db.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (!session?.user) navigate("/auth");
       setLoading(false);
@@ -58,11 +69,15 @@ const Admin = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (user) fetchSites();
+    if (user) {
+      fetchSites().catch(() => {
+        // API may be unavailable — admin still renders with empty data
+      });
+    }
   }, [user]);
 
   const fetchSites = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("sites")
       .select("*")
       .order("created_at", { ascending: false });
@@ -70,7 +85,7 @@ const Admin = () => {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await db.auth.signOut();
     navigate("/");
   };
 
@@ -120,9 +135,14 @@ const Admin = () => {
                 {sectionTitles[activeSection]}
               </h1>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4 mr-1" /> Sign Out
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+                <ExternalLink className="w-4 h-4 mr-1" /> View Card
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                <LogOut className="w-4 h-4 mr-1" /> Sign Out
+              </Button>
+            </div>
           </header>
 
           <main className="flex-1 p-4 md:p-6 overflow-auto">

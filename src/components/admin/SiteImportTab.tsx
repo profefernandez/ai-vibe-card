@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Globe, Loader2, CheckCircle, XCircle, Trash2 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
+import { Globe, Loader2, CheckCircle, XCircle, Trash2, RefreshCw } from "lucide-react";
 
 type Site = {
   id: string;
@@ -13,6 +13,7 @@ type Site = {
   scrape_status: string;
   page_count: number;
   share_usage_limit: number;
+  last_scraped_at: string | null;
   created_at: string;
 };
 
@@ -35,12 +36,25 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
   const [domain, setDomain] = useState("");
   const [siteName, setSiteName] = useState("");
   const [scraping, setScraping] = useState(false);
+  const [rescrapingId, setRescrapingId] = useState<string | null>(null);
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const { toast } = useToast();
 
+  const timeAgo = (dateStr: string | null) => {
+    if (!dateStr) return "Never";
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
   const fetchBlocks = async (siteId: string) => {
-    const { data } = await supabase
+    const { data } = await db
       .from("content_blocks")
       .select("*")
       .eq("site_id", siteId)
@@ -54,7 +68,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
     setScraping(true);
 
     try {
-      const { data: site, error: siteError } = await supabase
+      const { data: site, error: siteError } = await db
         .from("sites")
         .insert({ domain: domain.trim(), name: siteName.trim() || domain.trim(), user_id: user.id })
         .select()
@@ -65,7 +79,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
       toast({ title: "Scraping started", description: `Importing ${domain}...` });
       fetchSites();
 
-      const { data, error } = await supabase.functions.invoke("scrape-site", {
+      const { data, error } = await db.functions.invoke("scrape-site", {
         body: { domain: domain.trim(), site_id: (site as Site).id },
       });
 
@@ -85,13 +99,33 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
   };
 
   const deleteSite = async (siteId: string) => {
-    await supabase.from("sites").delete().eq("id", siteId);
+    await db.from("sites").delete().eq("id", siteId);
     if (selectedSite === siteId) {
       setSelectedSite(null);
       setBlocks([]);
     }
     fetchSites();
     toast({ title: "Site deleted" });
+  };
+
+  const handleRescrape = async (siteId: string, siteDomain: string) => {
+    setRescrapingId(siteId);
+    try {
+      toast({ title: "Re-scraping started", description: `Refreshing ${siteDomain}...` });
+      const { data, error } = await db.functions.invoke("scrape-site", {
+        body: { domain: siteDomain, site_id: siteId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      toast({ title: "Re-scrape complete!", description: `${data.pages} pages, ${data.blocks} content blocks refreshed.` });
+      fetchSites();
+      if (selectedSite === siteId) fetchBlocks(siteId);
+    } catch (err: any) {
+      toast({ title: "Re-scrape failed", description: err.message, variant: "destructive" });
+      fetchSites();
+    } finally {
+      setRescrapingId(null);
+    }
   };
 
   return (
@@ -134,11 +168,10 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
             {sites.map((site) => (
               <div
                 key={site.id}
-                className={`rounded-xl border p-4 flex items-center justify-between cursor-pointer transition-all ${
-                  selectedSite === site.id
-                    ? "border-primary/40 bg-primary/5"
-                    : "border-border/30 bg-card/30 hover:bg-card/50"
-                }`}
+                className={`rounded-xl border p-4 flex items-center justify-between cursor-pointer transition-all ${selectedSite === site.id
+                  ? "border-primary/40 bg-primary/5"
+                  : "border-border/30 bg-card/30 hover:bg-card/50"
+                  }`}
                 onClick={() => {
                   const next = selectedSite === site.id ? null : site.id;
                   setSelectedSite(next);
@@ -157,17 +190,29 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
                   )}
                   <div>
                     <p className="text-sm font-medium text-foreground">{site.name || site.domain}</p>
-                    <p className="text-xs text-muted-foreground">{site.domain} · {site.page_count} pages</p>
+                    <p className="text-xs text-muted-foreground">{site.domain} · {site.page_count} pages · Scraped {timeAgo(site.last_scraped_at)}</p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={(e) => { e.stopPropagation(); deleteSite(site.id); }}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => { e.stopPropagation(); handleRescrape(site.id, site.domain); }}
+                    disabled={rescrapingId === site.id}
+                    className="text-muted-foreground hover:text-primary"
+                    title="Re-scrape site"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${rescrapingId === site.id ? "animate-spin" : ""}`} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => { e.stopPropagation(); deleteSite(site.id); }}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

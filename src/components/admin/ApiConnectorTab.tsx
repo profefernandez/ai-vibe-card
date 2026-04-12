@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Loader2, Plug, Eye, EyeOff } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 
 type ApiConnection = {
   id: string;
@@ -37,7 +37,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
   }, []);
 
   const fetchConnections = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("api_connections")
       .select("*")
       .eq("user_id", user.id);
@@ -53,12 +53,12 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
 
     const existing = getConnection(providerId);
     if (existing) {
-      await supabase
+      await db
         .from("api_connections")
         .update({ api_key_encrypted: key, model_name: defaultModel })
         .eq("id", existing.id);
     } else {
-      await supabase.from("api_connections").insert({
+      await db.from("api_connections").insert({
         user_id: user.id,
         provider: providerId,
         api_key_encrypted: key,
@@ -75,12 +75,12 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
     // Deactivate all, then activate this one
     for (const conn of connections) {
       if (conn.is_active) {
-        await supabase.from("api_connections").update({ is_active: false }).eq("id", conn.id);
+        await db.from("api_connections").update({ is_active: false }).eq("id", conn.id);
       }
     }
     const conn = getConnection(providerId);
     if (conn) {
-      await supabase.from("api_connections").update({ is_active: true }).eq("id", conn.id);
+      await db.from("api_connections").update({ is_active: true }).eq("id", conn.id);
     }
     fetchConnections();
     toast({ title: `${providerId} set as active provider` });
@@ -91,7 +91,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
     if (!conn) return;
     setTesting(providerId);
     try {
-      const { data, error } = await supabase.functions.invoke("test-api-connection", {
+      const { data, error } = await db.functions.invoke("test-api-connection", {
         body: { provider: providerId, api_key: conn.api_key_encrypted },
       });
       if (error) throw error;
@@ -123,11 +123,10 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
           return (
             <div
               key={provider.id}
-              className={`rounded-xl border p-4 space-y-3 transition-all ${
-                conn?.is_active
-                  ? "border-primary/50 bg-primary/5"
-                  : "border-border/30 bg-card/30"
-              }`}
+              className={`rounded-xl border p-4 space-y-3 transition-all ${conn?.is_active
+                ? "border-primary/50 bg-primary/5"
+                : "border-border/30 bg-card/30"
+                }`}
             >
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">{provider.label}</h3>

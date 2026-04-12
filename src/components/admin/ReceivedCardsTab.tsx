@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, CreditCard, Globe } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 
 type ReceivedCard = {
   id: string;
@@ -30,7 +30,7 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
   }, []);
 
   const fetchCards = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("received_cards")
       .select("*")
       .eq("owner_id", user.id)
@@ -39,7 +39,7 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
   };
 
   const deleteCard = async (cardId: string) => {
-    await supabase.from("received_cards").delete().eq("id", cardId);
+    await db.from("received_cards").delete().eq("id", cardId);
     fetchCards();
     toast({ title: "Card removed" });
   };
@@ -76,11 +76,10 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
           {cards.map((card) => (
             <div
               key={card.id}
-              className={`relative rounded-2xl border p-5 transition-all ${
-                isExpired(card)
-                  ? "border-destructive/30 bg-destructive/5 opacity-60"
-                  : "border-border/30 bg-gradient-card glow-amber-sm hover:glow-amber"
-              }`}
+              className={`relative rounded-2xl border p-5 transition-all ${isExpired(card)
+                ? "border-destructive/30 bg-destructive/5 opacity-60"
+                : "border-border/30 bg-gradient-card glow-amber-sm hover:glow-amber"
+                }`}
             >
               {/* Delete button */}
               <Button
@@ -133,9 +132,8 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
                 </div>
                 <div className="h-1.5 bg-secondary/50 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${
-                      isExpired(card) ? "bg-destructive" : "bg-primary"
-                    }`}
+                    className={`h-full rounded-full transition-all ${isExpired(card) ? "bg-destructive" : "bg-primary"
+                      }`}
                     style={{ width: `${usagePercent(card)}%` }}
                   />
                 </div>

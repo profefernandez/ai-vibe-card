@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      // Forward /api requests to the local Express API server during development.
+      // Set API_PORT env var if your server runs on a different port.
+      "/api": {
+        target: `http://localhost:${process.env.API_PORT || 3001}`,
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

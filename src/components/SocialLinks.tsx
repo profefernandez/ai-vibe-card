@@ -26,7 +26,7 @@ const SocialLinks = () => (
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ delay: 0.5 + i * 0.06, type: "spring", stiffness: 200 }}
-        className="w-11 h-11 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200 border border-border/30"
+        className="w-11 h-11 rounded-full bg-secondary/80 flex items-center justify-center text-amber-200 hover:text-foreground hover:bg-primary/10 transition-all duration-200 border border-primary/30"
         aria-label={label}
       >
         <Icon className="w-5 h-5" />

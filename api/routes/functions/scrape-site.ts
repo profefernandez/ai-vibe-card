@@ -1,0 +1,193 @@
+/**
+ * scrape-site — crawl a domain and store content blocks.
+ * POST /api/functions/scrape-site
+ * Body: { domain: string, site_id: string }
+ *
+ * Requires env:  FIRECRAWL_API_KEY
+ * Requires auth: Bearer JWT (user must own the site record).
+ */
+
+import type { Request, Response } from "express";
+import { db } from "../../db.js";
+import { requireAuth, type AuthRequest } from "../../middleware/auth.js";
+
+// Inline auth check (not middleware — we want to handle errors ourselves)
+async function verifyAuth(req: Request): Promise<{ id: string; email: string } | null> {
+    const header = req.headers.authorization;
+    if (!header?.startsWith("Bearer ")) return null;
+    try {
+        const jwt = await import("jsonwebtoken");
+        const payload = jwt.default.verify(header.slice(7), process.env.JWT_SECRET as string) as any;
+        return { id: payload.sub, email: payload.email };
+    } catch {
+        return null;
+    }
+}
+
+type Block = {
+    heading: string | null;
+    body: string | null;
+    images: string[];
+    category: string | null;
+};
+
+function parseMarkdownToBlocks(markdown: string): Block[] {
+    const lines = markdown.split("\n");
+    const blocks: Block[] = [];
+    let currentBlock: Block | null = null;
+    const bodyLines: string[] = [];
+
+    const push = () => {
+        if (currentBlock) {
+            currentBlock.body = bodyLines.join("\n").trim();
+            if (currentBlock.heading || currentBlock.body) blocks.push(currentBlock);
+        }
+        bodyLines.length = 0;
+    };
+
+    for (const line of lines) {
+        if (line.startsWith("#")) {
+            push();
+            currentBlock = { heading: line.replace(/^#+\s*/, ""), body: null, images: [], category: null };
+        } else {
+            if (!currentBlock) currentBlock = { heading: null, body: null, images: [], category: null };
+            bodyLines.push(line);
+            const imgMatch = line.match(/!\[.*?\]\((.*?)\)/);
+            if (imgMatch) currentBlock.images.push(imgMatch[1]);
+        }
+    }
+    push();
+    return blocks.filter((b) => b.heading || (b.body && b.body.length > 10));
+}
+
+export async function handler(req: Request, res: Response): Promise<void> {
+    const user = await verifyAuth(req);
+    if (!user) {
+        res.status(401).json({ success: false, error: "Unauthorized" });
+        return;
+    }
+
+    const { domain, site_id } = req.body as { domain?: string; site_id?: string };
+    if (!domain || !site_id) {
+        res.status(400).json({ success: false, error: "domain and site_id are required" });
+        return;
+    }
+
+    const apiKey = process.env.FIRECRAWL_API_KEY;
+    if (!apiKey) {
+        res.status(500).json({ success: false, error: "Firecrawl connector not configured" });
+        return;
+    }
+
+    // Verify the site belongs to the requesting user
+    const siteCheck = await db.query("SELECT id FROM sites WHERE id = $1 AND user_id = $2", [
+        site_id,
+        user.id,
+    ]);
+    if (!siteCheck.rows.length) {
+        res.status(403).json({ success: false, error: "Forbidden" });
+        return;
+    }
+
+    let formattedUrl = domain.trim();
+    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+        formattedUrl = `https://${formattedUrl}`;
+    }
+
+    await db.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site_id]);
+
+    // Clear old data so re-scrape is a clean replace
+    await db.query("DELETE FROM content_blocks WHERE site_id = $1", [site_id]);
+    await db.query("DELETE FROM site_pages WHERE site_id = $1", [site_id]);
+
+    try {
+        const crawlResponse = await fetch("https://api.firecrawl.dev/v1/crawl", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                url: formattedUrl,
+                limit: 20,
+                scrapeOptions: { formats: ["markdown", "html"] },
+            }),
+        });
+
+        const crawlData = (await crawlResponse.json()) as any;
+        if (!crawlResponse.ok) {
+            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            throw new Error(crawlData.error || "Crawl failed");
+        }
+
+        const jobId: string = crawlData.id;
+        if (!jobId) {
+            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            throw new Error("No crawl job ID returned");
+        }
+
+        // Poll for completion (max 60 s)
+        let results: any[] | null = null;
+        for (let i = 0; i < 30; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const statusResp = await fetch(`https://api.firecrawl.dev/v1/crawl/${jobId}`, {
+                headers: { Authorization: `Bearer ${apiKey}` },
+            });
+            const statusData = (await statusResp.json()) as any;
+            if (statusData.status === "completed") {
+                results = statusData.data;
+                break;
+            } else if (statusData.status === "failed") {
+                await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+                throw new Error("Crawl job failed");
+            }
+        }
+
+        if (!results?.length) {
+            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            throw new Error("Crawl timed out or returned no results");
+        }
+
+        let totalBlocks = 0;
+        for (const page of results) {
+            const pageUrl: string = page.metadata?.sourceURL || page.url || formattedUrl;
+            const pageTitle: string = page.metadata?.title || "Untitled";
+            const markdown: string = page.markdown || "";
+            const html: string = page.html || "";
+
+            const pageResult = await db.query(
+                `INSERT INTO site_pages (site_id, url, title, markdown, html, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                [site_id, pageUrl, pageTitle, markdown, html, JSON.stringify(page.metadata || {})],
+            );
+            const pageId: string = pageResult.rows[0].id;
+
+            const blocks = parseMarkdownToBlocks(markdown);
+            for (let i = 0; i < blocks.length; i++) {
+                const b = blocks[i];
+                await db.query(
+                    `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [site_id, pageId, b.heading, b.body, b.images, b.category, i],
+                );
+                totalBlocks++;
+            }
+        }
+
+        await db.query(
+            "UPDATE sites SET scrape_status = 'completed', page_count = $1, last_scraped_at = NOW(), updated_at = NOW() WHERE id = $2",
+            [results.length, site_id],
+        );
+
+        res.json({ success: true, pages: results.length, blocks: totalBlocks });
+    } catch (err) {
+        console.error("scrape-site error:", err);
+        await db
+            .query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id])
+            .catch(() => { });
+        res.status(500).json({
+            success: false,
+            error: err instanceof Error ? err.message : "Unknown error",
+        });
+    }
+}

@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Save, Settings, Shield } from "lucide-react";
 import { toast } from "sonner";
-import type { User } from "@supabase/supabase-js";
 
 interface SettingsTabProps {
   user: User;
@@ -28,7 +28,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   }, [user]);
 
   const fetchSites = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("sites")
       .select("id, domain, share_usage_limit")
       .eq("user_id", user.id)
@@ -39,7 +39,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
 
   const handleUpdateLimit = async (siteId: string, limit: number) => {
     setSaving(siteId);
-    const { error } = await supabase
+    const { error } = await db
       .from("sites")
       .update({ share_usage_limit: limit })
       .eq("id", siteId);

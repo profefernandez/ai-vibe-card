@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,7 @@ type Site = {
   id: string;
   domain: string;
   name: string | null;
+  last_scraped_at: string | null;
 };
 
 type ContentBlock = {
@@ -34,7 +35,7 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
   }, [expandedSite]);
 
   const fetchBlocks = async (siteId: string) => {
-    const { data } = await supabase
+    const { data } = await db
       .from("content_blocks")
       .select("id, site_id, heading, body, category, tags, block_order")
       .eq("site_id", siteId)
@@ -48,7 +49,7 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
   };
 
   const saveEdit = async (blockId: string) => {
-    const { error } = await supabase
+    const { error } = await db
       .from("content_blocks")
       .update({ heading: editValues.heading, body: editValues.body, category: editValues.category })
       .eq("id", blockId);
@@ -62,7 +63,7 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
   };
 
   const deleteBlock = async (blockId: string) => {
-    await supabase.from("content_blocks").delete().eq("id", blockId);
+    await db.from("content_blocks").delete().eq("id", blockId);
     toast({ title: "Block deleted" });
     if (expandedSite) fetchBlocks(expandedSite);
   };

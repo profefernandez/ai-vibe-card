@@ -1,20 +1,13 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight, Sparkles, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
 import ReactMarkdown from "react-markdown";
 
 interface ExplorePanelProps {
   onSearch?: (query: string) => void;
+  onClose?: () => void;
 }
-
-type ContentBlock = {
-  id: string;
-  heading: string | null;
-  body: string | null;
-  images: string[];
-  category: string | null;
-};
 
 const SUGGESTIONS = [
   "What services do you offer?",
@@ -23,10 +16,11 @@ const SUGGESTIONS = [
   "How can AI help social workers?",
 ];
 
-const ExplorePanel = ({ onSearch }: ExplorePanelProps) => {
+const ExplorePanel = ({ onSearch, onClose }: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
-  const [blocks, setBlocks] = useState<ContentBlock[]>([]);
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [noContent, setNoContent] = useState(false);
 
@@ -37,23 +31,27 @@ const ExplorePanel = ({ onSearch }: ExplorePanelProps) => {
     setQuery("");
     setLoading(true);
     setNoContent(false);
+    setAnswer(null);
     onSearch?.(searchText);
 
     try {
-      const { data, error } = await supabase.functions.invoke("query-content", {
-        body: { query: searchText },
+      const { data, error } = await db.functions.invoke("lemonade-chat", {
+        body: { message: searchText, conversation_id: conversationId },
       });
 
       if (error) throw error;
-      if (data?.blocks && data.blocks.length > 0) {
-        setBlocks(data.blocks);
+
+      const result = data as { response?: string; conversation_id?: string };
+      if (result.conversation_id) {
+        setConversationId(result.conversation_id);
+      }
+      if (result.response) {
+        setAnswer(result.response);
       } else {
-        setBlocks([]);
         setNoContent(true);
       }
     } catch (err) {
       console.error("Query error:", err);
-      setBlocks([]);
       setNoContent(true);
     } finally {
       setLoading(false);
@@ -132,10 +130,16 @@ const ExplorePanel = ({ onSearch }: ExplorePanelProps) => {
               className="space-y-4"
             >
               <button
-                onClick={() => { setActiveQuery(null); setBlocks([]); setNoContent(false); }}
+                onClick={() => {
+                  setActiveQuery(null);
+                  setAnswer(null);
+                  setNoContent(false);
+                  onClose?.();
+                }}
                 className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                aria-label="Return to the business card"
               >
-                ← Back to search
+                ← Back to card
               </button>
 
               <div className="flex items-start gap-3 mb-2">
@@ -143,7 +147,7 @@ const ExplorePanel = ({ onSearch }: ExplorePanelProps) => {
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Showing results for</p>
+                  <p className="text-xs text-muted-foreground mb-1">You asked</p>
                   <p className="text-sm font-medium text-foreground">{activeQuery}</p>
                 </div>
               </div>
@@ -162,47 +166,42 @@ const ExplorePanel = ({ onSearch }: ExplorePanelProps) => {
                 </div>
               ) : noContent ? (
                 <div className="rounded-2xl border border-border/30 bg-secondary/20 p-6 text-center">
-                  <p className="text-sm text-muted-foreground">No content imported yet. Import a website from the admin dashboard to get started.</p>
+                  <p className="text-sm text-muted-foreground">I couldn't get a response right now. Please try again in a moment.</p>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {blocks.map((block, i) => (
-                    <motion.div
-                      key={block.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1, duration: 0.3 }}
-                      className="rounded-2xl border border-border/30 bg-secondary/20 p-5"
-                    >
-                      {block.heading && (
-                        <h3 className="text-sm font-semibold text-foreground mb-2">{block.heading}</h3>
-                      )}
-                      {block.body && (
-                        <div className="text-xs text-muted-foreground leading-relaxed prose prose-invert prose-xs max-w-none">
-                          <ReactMarkdown>{block.body.slice(0, 500)}</ReactMarkdown>
-                        </div>
-                      )}
-                      {block.images && block.images.length > 0 && (
-                        <div className="flex gap-2 mt-3">
-                          {block.images.slice(0, 2).map((img, j) => (
-                            <img
-                              key={j}
-                              src={img}
-                              alt=""
-                              className="w-16 h-16 rounded-lg object-cover border border-border/20"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {block.category && (
-                        <span className="text-[10px] text-muted-foreground/40 mt-2 inline-block uppercase tracking-wider">
-                          {block.category}
-                        </span>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
+              ) : answer ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="rounded-2xl border border-border/30 bg-secondary/20 p-5"
+                >
+                  <div className="text-sm text-foreground/90 leading-relaxed prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown>{answer}</ReactMarkdown>
+                  </div>
+                </motion.div>
+              ) : null}
+
+              {/* Follow-up input */}
+              {!loading && (answer || noContent) && (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
+                  className="relative mt-4"
+                >
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ask a follow-up..."
+                    className="w-full bg-secondary/60 rounded-2xl pl-11 pr-12 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 border border-border/30 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!query.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
               )}
             </motion.div>
           )}

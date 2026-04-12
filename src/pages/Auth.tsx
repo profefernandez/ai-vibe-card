@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +20,7 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { error } = await db.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin },
@@ -28,7 +28,7 @@ const Auth = () => {
         if (error) throw error;
         toast({ title: "Check your email", description: "We sent you a verification link." });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) throw error;
         navigate("/admin");
       }

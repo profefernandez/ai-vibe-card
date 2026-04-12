@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient as db } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, User } from "lucide-react";
+import { Loader2, Save, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
-import type { User as SupaUser } from "@supabase/supabase-js";
 
 interface ProfileTabProps {
-  user: SupaUser;
+  user: User;
 }
 
 interface Profile {
@@ -37,7 +37,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   }, [user]);
 
   const fetchProfile = async () => {
-    const { data } = await supabase
+    const { data } = await db
       .from("profiles")
       .select("*")
       .eq("user_id", user.id)
@@ -57,7 +57,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase
+    const { error } = await db
       .from("profiles")
       .upsert(
         { user_id: user.id, ...profile, updated_at: new Date().toISOString() },
@@ -90,7 +90,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       <Card className="bg-card/50 border-border/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-sans">
-            <User className="w-4 h-4 text-primary" /> Business Card Details
+            <UserIcon className="w-4 h-4 text-primary" /> Business Card Details
           </CardTitle>
           <CardDescription>This info appears on your shared card.</CardDescription>
         </CardHeader>

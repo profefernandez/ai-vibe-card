@@ -79,7 +79,7 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
     }
   }, [initialMessage]);
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const message = text || input.trim();
     if (!message) return;
 
@@ -88,11 +88,31 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      const response = getAiResponse(userMsg.content);
-      setMessages((prev) => [...prev, { role: "assistant", content: response }]);
+    try {
+      const { data, error } = await db.functions.invoke("lemonade-chat", {
+        body: { message, conversation_id: conversationId },
+      });
+
+      if (error) throw error;
+
+      const result = data as { response?: string; conversation_id?: string };
+      if (result.conversation_id) {
+        setConversationId(result.conversation_id);
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: result.response || "Sorry, I couldn't get a response. Please try again." },
+      ]);
+    } catch (err) {
+      console.error("Lemonade chat error:", err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "I'm having trouble connecting right now. Please try again in a moment." },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 600 + Math.random() * 600);
+    }
   };
 
   return (
@@ -152,11 +172,10 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
                 </div>
               )}
               <div
-                className={`max-w-[80%] text-sm leading-relaxed ${
-                  msg.role === "assistant"
+                className={`max-w-[80%] text-sm leading-relaxed ${msg.role === "assistant"
                     ? "bg-secondary/70 backdrop-blur-sm text-secondary-foreground rounded-2xl rounded-tl-md px-4 py-3 border border-border/30"
                     : "bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 glow-amber-sm"
-                }`}
+                  }`}
               >
                 {msg.content.split("\n").map((line, j) => (
                   <p key={j} className={j > 0 ? "mt-1" : ""}>
