@@ -48,6 +48,49 @@
     --sidebar-border: 30 8% 20%;
     --sidebar-ring: 38 95% 50%;
   }
+
+  /* ── Light theme ── */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 30 5% 12%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 30 5% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 5% 12%;
+
+    --primary: 38 95% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 5% 93%;
+    --secondary-foreground: 30 5% 25%;
+
+    --muted: 30 5% 90%;
+    --muted-foreground: 30 5% 45%;
+
+    --accent: 38 80% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 8% 85%;
+    --input: 30 8% 85%;
+    --ring: 38 95% 50%;
+
+    --amber-glow: 38 95% 50%;
+    --amber-soft: 38 40% 80%;
+
+    --sidebar-background: 0 0% 97%;
+    --sidebar-foreground: 30 5% 12%;
+    --sidebar-primary: 38 95% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 30 5% 93%;
+    --sidebar-accent-foreground: 30 5% 12%;
+    --sidebar-border: 30 8% 85%;
+    --sidebar-ring: 38 95% 50%;
+  }
 }
 
 @layer base {
@@ -60,7 +103,10 @@
     font-family: 'Inter', sans-serif;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: 'Playfair Display', serif;
   }
 }
@@ -96,6 +142,7 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -105,9 +152,11 @@
 ::-webkit-scrollbar {
   width: 4px;
 }
+
 ::-webkit-scrollbar-track {
   background: hsl(30 5% 8%);
 }
+
 ::-webkit-scrollbar-thumb {
   background: hsl(38 95% 50% / 0.3);
   border-radius: 2px;

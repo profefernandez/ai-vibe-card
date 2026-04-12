@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient as db } from "@/lib/apiClient";
 import type { User } from "@/lib/apiClient";
@@ -42,6 +42,13 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<AdminSection>("import");
   const navigate = useNavigate();
+  const mainRef = useRef<HTMLElement>(null);
+
+  const handleSectionChange = (section: AdminSection) => {
+    setActiveSection(section);
+    // Move focus to main content area for screen readers
+    setTimeout(() => mainRef.current?.focus(), 100);
+  };
 
   useEffect(() => {
     // DEV BYPASS: skip auth entirely when API is not running
@@ -121,31 +128,46 @@ const Admin = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-dark">
+        {/* Skip to content link for keyboard users */}
+        <a
+          href="#admin-main"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground"
+        >
+          Skip to main content
+        </a>
+
         <AdminSidebar
           activeSection={activeSection}
-          onSectionChange={setActiveSection}
+          onSectionChange={handleSectionChange}
           onBack={() => navigate("/")}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4">
+          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4" role="banner">
             <div className="flex items-center gap-3">
-              <SidebarTrigger />
+              <SidebarTrigger aria-label="Toggle sidebar" />
               <h1 className="text-lg font-semibold text-foreground font-sans">
                 {sectionTitles[activeSection]}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
-                <ExternalLink className="w-4 h-4 mr-1" /> View Card
+            <nav className="flex items-center gap-2" aria-label="Admin actions">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/")} aria-label="View business card">
+                <ExternalLink className="w-4 h-4 mr-1" aria-hidden="true" /> View Card
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                <LogOut className="w-4 h-4 mr-1" /> Sign Out
+              <Button variant="ghost" size="sm" onClick={handleSignOut} aria-label="Sign out">
+                <LogOut className="w-4 h-4 mr-1" aria-hidden="true" /> Sign Out
               </Button>
-            </div>
+            </nav>
           </header>
 
-          <main className="flex-1 p-4 md:p-6 overflow-auto">
+          <main
+            id="admin-main"
+            ref={mainRef}
+            tabIndex={-1}
+            className="flex-1 p-4 md:p-6 overflow-auto focus:outline-none"
+            aria-label={sectionTitles[activeSection]}
+            aria-live="polite"
+          >
             {renderContent()}
           </main>
         </div>

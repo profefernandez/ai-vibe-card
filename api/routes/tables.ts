@@ -39,11 +39,11 @@ const ALLOWED_TABLES = new Set([
 // ── Column allowlist per table (prevents arbitrary column injection) ───────────
 // All non-listed columns are stripped on INSERT/UPDATE.
 const TABLE_COLUMNS: Record<string, string[]> = {
-    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "calendly_url", "updated_at"],
+    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "robots_txt", "updated_at"],
     sites: ["user_id", "domain", "name", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "block_order"],
-    ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "updated_at"],
+    ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
     received_cards: ["owner_id", "sender_name", "sender_domain", "sender_avatar", "sender_tagline", "notes", "usage_count", "usage_limit"],
 };

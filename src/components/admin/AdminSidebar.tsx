@@ -46,7 +46,7 @@ export default function AdminSidebar({ activeSection, onSectionChange, onBack }:
   const collapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/30">
+    <Sidebar collapsible="icon" className="border-r border-border/30" aria-label="Admin navigation">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Dashboard</SidebarGroupLabel>
@@ -58,8 +58,9 @@ export default function AdminSidebar({ activeSection, onSectionChange, onBack }:
                     isActive={activeSection === item.value}
                     onClick={() => onSectionChange(item.value)}
                     tooltip={item.title}
+                    aria-current={activeSection === item.value ? "page" : undefined}
                   >
-                    <item.icon className="h-4 w-4" />
+                    <item.icon className="h-4 w-4" aria-hidden="true" />
                     {!collapsed && <span>{item.title}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -80,8 +81,9 @@ export default function AdminSidebar({ activeSection, onSectionChange, onBack }:
                     isActive={activeSection === item.value}
                     onClick={() => onSectionChange(item.value)}
                     tooltip={item.title}
+                    aria-current={activeSection === item.value ? "page" : undefined}
                   >
-                    <item.icon className="h-4 w-4" />
+                    <item.icon className="h-4 w-4" aria-hidden="true" />
                     {!collapsed && <span>{item.title}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -94,8 +96,8 @@ export default function AdminSidebar({ activeSection, onSectionChange, onBack }:
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onBack} tooltip="Back to site">
-              <ArrowLeft className="h-4 w-4" />
+            <SidebarMenuButton onClick={onBack} tooltip="Back to site" aria-label="Back to site">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               {!collapsed && <span>Back to Site</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -131,9 +131,15 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">{provider.label}</h3>
                 {hasKey ? (
-                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4 text-green-500" aria-hidden="true" />
+                    <span className="sr-only">Connected</span>
+                  </span>
                 ) : (
-                  <XCircle className="w-4 h-4 text-muted-foreground/40" />
+                  <span className="flex items-center gap-1">
+                    <XCircle className="w-4 h-4 text-muted-foreground/40" aria-hidden="true" />
+                    <span className="sr-only">Not connected</span>
+                  </span>
                 )}
               </div>
 
@@ -145,11 +151,13 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
                     value={keyInputs[provider.id] || ""}
                     onChange={(e) => setKeyInputs({ ...keyInputs, [provider.id]: e.target.value })}
                     className="bg-secondary/60 border-border/30 text-xs pr-8"
+                    aria-label={`API key for ${provider.label}`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowKey({ ...showKey, [provider.id]: !showKey[provider.id] })}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showKey[provider.id] ? `Hide ${provider.label} API key` : `Show ${provider.label} API key`}
                   >
                     {showKey[provider.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                   </button>
@@ -159,6 +167,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
                   variant="secondary"
                   onClick={() => saveConnection(provider.id, provider.defaultModel)}
                   disabled={!keyInputs[provider.id]?.trim()}
+                  aria-label={`Save ${provider.label} API key`}
                 >
                   Save
                 </Button>
@@ -170,6 +179,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
                     size="sm"
                     variant={conn?.is_active ? "default" : "outline"}
                     onClick={() => toggleActive(provider.id)}
+                    aria-pressed={conn?.is_active}
                     className="text-xs"
                   >
                     {conn?.is_active ? "Active" : "Set Active"}
@@ -179,10 +189,11 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
                     variant="ghost"
                     onClick={() => testConnection(provider.id)}
                     disabled={testing === provider.id}
+                    aria-label={`Test ${provider.label} connection`}
                     className="text-xs"
                   >
                     {testing === provider.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" aria-hidden="true" />
                     ) : null}
                     Test
                   </Button>

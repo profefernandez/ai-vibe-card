@@ -20,6 +20,7 @@ import dotenv from "dotenv";
 import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
+import { db } from "./db.js";
 
 dotenv.config();
 
@@ -37,6 +38,27 @@ app.use("/api/functions", functionsRouter);
 
 // Health check
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// Dynamic robots.txt — renders structured JSON into standard robots.txt format
+app.get("/robots.txt", async (_req, res) => {
+    try {
+        const { rows } = await db.query(
+            `SELECT robots_txt FROM profiles LIMIT 1`
+        );
+        const directives = rows[0]?.robots_txt ?? [{ userAgent: "*", rules: [{ action: "allow", path: "/" }] }];
+        const lines: string[] = [];
+        for (const group of directives) {
+            lines.push(`User-agent: ${group.userAgent}`);
+            for (const rule of group.rules || []) {
+                lines.push(`${rule.action === "disallow" ? "Disallow" : "Allow"}: ${rule.path}`);
+            }
+            lines.push("");
+        }
+        res.type("text/plain").send(lines.join("\n"));
+    } catch {
+        res.type("text/plain").send("User-agent: *\nAllow: /\n");
+    }
+});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

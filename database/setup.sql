@@ -144,7 +144,19 @@ CREATE TABLE IF NOT EXISTS profiles (
     tagline       TEXT        NOT NULL DEFAULT '',
     bio           TEXT        NOT NULL DEFAULT '',
     avatar_url    TEXT        NOT NULL DEFAULT '',
-    calendly_url  TEXT        NOT NULL DEFAULT '',
+    cta_url       TEXT        NOT NULL DEFAULT '',
+    cta_label     TEXT        NOT NULL DEFAULT 'Get in Touch',
+    cta_embed     TEXT        NOT NULL DEFAULT '',
+    social_links  JSONB       NOT NULL DEFAULT '[]',
+    card_layout   TEXT        NOT NULL DEFAULT 'classic'
+                      CHECK (card_layout IN ('classic', 'bold')),
+    theme         TEXT        NOT NULL DEFAULT 'dark'
+                      CHECK (theme IN ('dark', 'light', 'system')),
+    accent_color  TEXT        NOT NULL DEFAULT 'amber',
+    seo_title     TEXT        NOT NULL DEFAULT '',
+    seo_description TEXT      NOT NULL DEFAULT '',
+    og_image_url  TEXT        NOT NULL DEFAULT '',
+    robots_txt    JSONB       NOT NULL DEFAULT '[{"userAgent":"*","rules":[{"action":"allow","path":"/"}]}]',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_profiles_user UNIQUE (user_id)
@@ -242,6 +254,8 @@ CREATE TABLE IF NOT EXISTS ai_preferences (
     rules           JSONB       NOT NULL DEFAULT '[]',
     personality     TEXT        NOT NULL DEFAULT 'professional',
     response_style  TEXT        NOT NULL DEFAULT 'friendly',
+    prompt_injection_rules JSONB NOT NULL DEFAULT '[]',
+    safety_protocol TEXT        NOT NULL DEFAULT '',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_ai_prefs_user UNIQUE (user_id)

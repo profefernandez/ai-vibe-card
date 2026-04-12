@@ -87,8 +87,9 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
                 size="icon"
                 className="absolute top-2 right-2 text-muted-foreground hover:text-destructive h-7 w-7"
                 onClick={() => deleteCard(card.id)}
+                aria-label={`Delete card from ${card.sender_name}`}
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-3 h-3" aria-hidden="true" />
               </Button>
 
               {/* Avatar */}
@@ -130,7 +131,7 @@ const ReceivedCardsTab = ({ user }: ReceivedCardsTabProps) => {
                     {isExpired(card) ? "Limit reached" : `Uses: ${card.usage_count}/${card.usage_limit}`}
                   </span>
                 </div>
-                <div className="h-1.5 bg-secondary/50 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-secondary/50 rounded-full overflow-hidden" role="progressbar" aria-valuenow={card.usage_count} aria-valuemin={0} aria-valuemax={card.usage_limit} aria-label={`Usage: ${card.usage_count} of ${card.usage_limit}`}>
                   <div
                     className={`h-full rounded-full transition-all ${isExpired(card) ? "bg-destructive" : "bg-primary"
                       }`}

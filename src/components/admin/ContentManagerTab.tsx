@@ -82,17 +82,19 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
               <button
                 onClick={() => setExpandedSite(expandedSite === site.id ? null : site.id)}
                 className="w-full flex items-center justify-between p-4 text-left hover:bg-card/50 transition-colors"
+                aria-expanded={expandedSite === site.id}
+                aria-controls={`site-content-${site.id}`}
               >
                 <span className="text-sm font-medium text-foreground">{site.name || site.domain}</span>
                 {expandedSite === site.id ? (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 )}
               </button>
 
               {expandedSite === site.id && (
-                <div className="border-t border-border/20 p-4 space-y-3 max-h-[500px] overflow-y-auto">
+                <div id={`site-content-${site.id}`} className="border-t border-border/20 p-4 space-y-3 max-h-[500px] overflow-y-auto">
                   {blocks.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No content blocks.</p>
                   ) : (
@@ -104,18 +106,21 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
                               value={editValues.heading || ""}
                               onChange={(e) => setEditValues({ ...editValues, heading: e.target.value })}
                               placeholder="Heading"
+                              aria-label="Block heading"
                               className="bg-secondary/60 border-border/30 text-sm"
                             />
                             <Textarea
                               value={editValues.body || ""}
                               onChange={(e) => setEditValues({ ...editValues, body: e.target.value })}
                               placeholder="Body"
+                              aria-label="Block body"
                               className="bg-secondary/60 border-border/30 text-xs min-h-[60px]"
                             />
                             <Input
                               value={editValues.category || ""}
                               onChange={(e) => setEditValues({ ...editValues, category: e.target.value })}
                               placeholder="Category"
+                              aria-label="Block category"
                               className="bg-secondary/60 border-border/30 text-sm"
                             />
                             <div className="flex gap-2">
@@ -128,7 +133,14 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
                         ) : (
                           <>
                             <div className="flex items-start justify-between">
-                              <div className="flex-1 cursor-pointer" onClick={() => startEdit(block)}>
+                              <div
+                                className="flex-1 cursor-pointer"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => startEdit(block)}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startEdit(block); } }}
+                                aria-label={`Edit block: ${block.heading || "Untitled"}`}
+                              >
                                 {block.heading && <p className="text-sm font-medium text-foreground">{block.heading}</p>}
                                 <p className="text-xs text-muted-foreground line-clamp-2">{block.body}</p>
                                 {block.category && (
@@ -140,6 +152,7 @@ const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
                                 size="icon"
                                 className="text-muted-foreground hover:text-destructive shrink-0"
                                 onClick={() => deleteBlock(block.id)}
+                                aria-label={`Delete block: ${block.heading || "Untitled"}`}
                               >
                                 <Trash2 className="w-3 h-3" />
                               </Button>

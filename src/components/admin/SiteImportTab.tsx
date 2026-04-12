@@ -139,21 +139,29 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
           Enter a domain to scrape and import its content. The AI will use this to answer visitor queries.
         </p>
         <form onSubmit={handleImport} className="flex flex-col sm:flex-row gap-3">
-          <Input
-            placeholder="Site name (optional)"
-            value={siteName}
-            onChange={(e) => setSiteName(e.target.value)}
-            className="bg-secondary/60 border-border/30 sm:w-48"
-          />
-          <Input
-            placeholder="example.com"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            required
-            className="bg-secondary/60 border-border/30 flex-1"
-          />
+          <div>
+            <label htmlFor="site-name" className="sr-only">Site name</label>
+            <Input
+              id="site-name"
+              placeholder="Site name (optional)"
+              value={siteName}
+              onChange={(e) => setSiteName(e.target.value)}
+              className="bg-secondary/60 border-border/30 sm:w-48"
+            />
+          </div>
+          <div className="flex-1">
+            <label htmlFor="site-domain" className="sr-only">Domain</label>
+            <Input
+              id="site-domain"
+              placeholder="example.com"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              required
+              className="bg-secondary/60 border-border/30"
+            />
+          </div>
           <Button type="submit" disabled={scraping || !domain.trim()}>
-            {scraping ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Scraping...</> : "Import Site"}
+            {scraping ? <><Loader2 className="w-4 h-4 animate-spin mr-1" aria-hidden="true" /> Scraping...</> : "Import Site"}
           </Button>
         </form>
       </div>
@@ -168,25 +176,37 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
             {sites.map((site) => (
               <div
                 key={site.id}
+                role="button"
+                tabIndex={0}
                 className={`rounded-xl border p-4 flex items-center justify-between cursor-pointer transition-all ${selectedSite === site.id
                   ? "border-primary/40 bg-primary/5"
                   : "border-border/30 bg-card/30 hover:bg-card/50"
                   }`}
+                aria-pressed={selectedSite === site.id}
+                aria-label={`${site.name || site.domain}, ${site.page_count} pages, status: ${site.scrape_status}`}
                 onClick={() => {
                   const next = selectedSite === site.id ? null : site.id;
                   setSelectedSite(next);
                   if (next) fetchBlocks(next);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const next = selectedSite === site.id ? null : site.id;
+                    setSelectedSite(next);
+                    if (next) fetchBlocks(next);
+                  }
+                }}
               >
                 <div className="flex items-center gap-3">
                   {site.scrape_status === "completed" ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <><CheckCircle className="w-5 h-5 text-green-500" aria-hidden="true" /><span className="sr-only">Status: completed</span></>
                   ) : site.scrape_status === "scraping" ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <><Loader2 className="w-5 h-5 animate-spin text-primary" aria-hidden="true" /><span className="sr-only">Status: scraping</span></>
                   ) : site.scrape_status === "error" ? (
-                    <XCircle className="w-5 h-5 text-destructive" />
+                    <><XCircle className="w-5 h-5 text-destructive" aria-hidden="true" /><span className="sr-only">Status: error</span></>
                   ) : (
-                    <Globe className="w-5 h-5 text-muted-foreground" />
+                    <><Globe className="w-5 h-5 text-muted-foreground" aria-hidden="true" /><span className="sr-only">Status: pending</span></>
                   )}
                   <div>
                     <p className="text-sm font-medium text-foreground">{site.name || site.domain}</p>
@@ -200,7 +220,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
                     onClick={(e) => { e.stopPropagation(); handleRescrape(site.id, site.domain); }}
                     disabled={rescrapingId === site.id}
                     className="text-muted-foreground hover:text-primary"
-                    title="Re-scrape site"
+                    aria-label={`Re-scrape ${site.name || site.domain}`}
                   >
                     <RefreshCw className={`w-4 h-4 ${rescrapingId === site.id ? "animate-spin" : ""}`} />
                   </Button>
@@ -209,6 +229,7 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
                     size="icon"
                     onClick={(e) => { e.stopPropagation(); deleteSite(site.id); }}
                     className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete ${site.name || site.domain}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

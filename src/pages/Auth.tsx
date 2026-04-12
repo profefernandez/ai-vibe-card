@@ -40,10 +40,10 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-dark flex items-center justify-center px-4">
+    <main className="min-h-screen bg-gradient-dark flex items-center justify-center px-4" aria-label="Authentication">
       <div className="w-full max-w-sm space-y-6">
-        <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1">
-          <ArrowLeft className="w-4 h-4" /> Back
+        <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground text-sm flex items-center gap-1" aria-label="Back to home page">
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back
         </button>
 
         <div>
@@ -54,23 +54,33 @@ const Auth = () => {
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
-          <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-secondary/60 border-border/30"
-          />
-          <Input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="bg-secondary/60 border-border/30"
-          />
+          <div className="space-y-1">
+            <label htmlFor="auth-email" className="sr-only">Email</label>
+            <Input
+              id="auth-email"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              className="bg-secondary/60 border-border/30"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="auth-password" className="sr-only">Password</label>
+            <Input
+              id="auth-password"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              autoComplete={isSignUp ? "new-password" : "current-password"}
+              className="bg-secondary/60 border-border/30"
+            />
+          </div>
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
           </Button>
@@ -83,7 +93,7 @@ const Auth = () => {
           </button>
         </p>
       </div>
-    </div>
+    </main>
   );
 };
 
