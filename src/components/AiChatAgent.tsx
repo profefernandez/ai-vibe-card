@@ -2,26 +2,16 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Zap, Sparkles } from "lucide-react";
 import { apiClient as db } from "@/lib/apiClient";
-
-type Message = {
-  role: "user" | "assistant";
-  content: string;
-};
+import type { ChatMessage } from "@/types";
+import { QUICK_PROMPTS } from "@/lib/constants";
 
 interface AiChatAgentProps {
   initialMessage?: string | null;
   onMessageConsumed?: () => void;
 }
 
-const QUICK_PROMPTS = [
-  "What services do you offer?",
-  "How much does it cost?",
-  "Tell me about Tanya",
-  "Book a call",
-];
-
 const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) => {
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
       content: "Hey! ✨ I'm Watts, your AI guide. Ask me anything about our services, pricing, or how we help social workers harness AI ethically.",
@@ -48,7 +38,7 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
     const message = text || input.trim();
     if (!message) return;
 
-    const userMsg: Message = { role: "user", content: message };
+    const userMsg: ChatMessage = { role: "user", content: message };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
@@ -138,8 +128,8 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
               )}
               <div
                 className={`max-w-[80%] text-sm leading-relaxed ${msg.role === "assistant"
-                    ? "bg-secondary/70 backdrop-blur-sm text-secondary-foreground rounded-2xl rounded-tl-md px-4 py-3 border border-border/30"
-                    : "bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 glow-amber-sm"
+                  ? "bg-secondary/70 backdrop-blur-sm text-secondary-foreground rounded-2xl rounded-tl-md px-4 py-3 border border-border/30"
+                  : "bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 glow-amber-sm"
                   }`}
               >
                 {msg.content.split("\n").map((line, j) => (

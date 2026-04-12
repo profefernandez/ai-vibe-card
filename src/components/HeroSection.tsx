@@ -3,13 +3,11 @@ import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion"
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
-import type { SocialLink } from "./SocialLinks";
+import type { SocialLink, Profile, CardLayout } from "@/types";
 import ExplorePanel from "./ExplorePanel";
 import { Search, ChevronLeft, Calendar, X } from "lucide-react";
 import { apiClient as db } from "@/lib/apiClient";
 import { applyTheme } from "@/lib/theme";
-
-type CardLayout = "classic" | "bold";
 
 /** Upsert a <meta> tag in <head> by name or property attribute. */
 function setMetaTag(key: string, content: string, isProperty = false) {
@@ -21,18 +19,6 @@ function setMetaTag(key: string, content: string, isProperty = false) {
     document.head.appendChild(el);
   }
   el.setAttribute("content", content);
-}
-
-interface Profile {
-  display_name: string;
-  tagline: string;
-  bio: string;
-  avatar_url: string;
-  cta_url: string;
-  cta_label: string;
-  cta_embed: string;
-  social_links: SocialLink[];
-  card_layout: CardLayout;
 }
 
 const HeroSection = () => {

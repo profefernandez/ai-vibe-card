@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Site } from "@/types";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Loader2, LogOut, ExternalLink } from "lucide-react";
@@ -15,17 +16,6 @@ import ReceivedCardsTab from "@/components/admin/ReceivedCardsTab";
 import ProfileTab from "@/components/admin/ProfileTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 
-type Site = {
-  id: string;
-  domain: string;
-  name: string | null;
-  scrape_status: string;
-  page_count: number;
-  share_usage_limit: number;
-  last_scraped_at: string | null;
-  created_at: string;
-};
-
 const sectionTitles: Record<AdminSection, string> = {
   import: "Site Import",
   content: "Content Manager",
@@ -37,9 +27,8 @@ const sectionTitles: Record<AdminSection, string> = {
 };
 
 const Admin = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading, signOut } = useAuth();
   const [sites, setSites] = useState<Site[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<AdminSection>("import");
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
@@ -51,29 +40,10 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    // DEV BYPASS: skip auth entirely when API is not running
-    if (!import.meta.env.PROD) {
-      setUser({ id: "dev-user", email: "dev@localhost" });
-      setLoading(false);
-      return;
+    if (!loading && !user && import.meta.env.PROD) {
+      navigate("/auth");
     }
-
-    const { data: { subscription } } = db.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-      } else {
-        navigate("/auth");
-      }
-    });
-
-    db.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (!session?.user) navigate("/auth");
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     if (user) {
@@ -92,7 +62,7 @@ const Admin = () => {
   };
 
   const handleSignOut = async () => {
-    await db.auth.signOut();
+    await signOut();
     navigate("/");
   };
 

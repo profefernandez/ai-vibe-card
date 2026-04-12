@@ -1,21 +1,9 @@
 import { useState, useEffect } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import type { User, ReceivedCard } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, CreditCard, Globe } from "lucide-react";
-
-type ReceivedCard = {
-  id: string;
-  sender_name: string;
-  sender_domain: string;
-  sender_avatar: string;
-  sender_tagline: string;
-  notes: string;
-  usage_count: number;
-  usage_limit: number;
-  created_at: string;
-};
 
 interface ReceivedCardsTabProps {
   user: User;

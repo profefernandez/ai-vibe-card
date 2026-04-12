@@ -1,20 +1,37 @@
 /**
  * test-api-connection — validate an external AI provider API key.
  * POST /api/functions/test-api-connection
- * Body: { provider: "openai" | "anthropic" | "google" | "lemonade", api_key: string }
+ * Body: { provider: "openai" | "anthropic" | "google" | "lemonade" }
+ *
+ * The API key is looked up server-side from api_connections for the
+ * authenticated user — it is NEVER sent from the client.
+ * Requires: requireAuth middleware (applied in functions/index.ts)
  */
 
-import type { Request, Response } from "express";
+import type { Response } from "express";
+import type { AuthRequest } from "../../middleware/auth.js";
+import { db } from "../../db.js";
 
-export async function handler(req: Request, res: Response): Promise<void> {
-    const { provider, api_key } = req.body as { provider?: string; api_key?: string };
+export async function handler(req: AuthRequest, res: Response): Promise<void> {
+    const { provider } = req.body as { provider?: string };
 
-    if (!provider || !api_key) {
-        res.status(400).json({ success: false, error: "Missing provider or api_key" });
+    if (!provider) {
+        res.status(400).json({ success: false, error: "Missing provider" });
         return;
     }
 
     try {
+        // Look up the stored API key for this user + provider
+        const { rows } = await db.query(
+            `SELECT api_key_encrypted FROM api_connections WHERE user_id = $1 AND provider = $2`,
+            [req.user!.id, provider],
+        );
+        const api_key = rows[0]?.api_key_encrypted;
+        if (!api_key) {
+            res.status(404).json({ success: false, error: "No API key stored for this provider" });
+            return;
+        }
+
         let testUrl = "";
         let testHeaders: Record<string, string> = {};
         let testBody = "";
@@ -44,7 +61,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                 break;
 
             case "lemonade":
-                res.json({ success: !!api_key, message: "Key stored. Launch Lemonade integration ready." });
+                res.json({ success: true, message: "Key stored. Launch Lemonade integration ready." });
                 return;
 
             default:

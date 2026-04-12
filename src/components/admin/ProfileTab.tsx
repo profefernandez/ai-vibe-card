@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import type { User, Profile, SocialLink, CardLayout } from "@/types";
+import { PLATFORM_OPTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,44 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, Save, User as UserIcon, Plus, X, LayoutTemplate, Upload, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
-const PLATFORM_OPTIONS = [
-  { value: "phone", label: "Phone" },
-  { value: "email", label: "Email" },
-  { value: "linkedin", label: "LinkedIn" },
-  { value: "instagram", label: "Instagram" },
-  { value: "twitter", label: "X / Twitter" },
-  { value: "facebook", label: "Facebook" },
-  { value: "youtube", label: "YouTube" },
-  { value: "tiktok", label: "TikTok" },
-  { value: "github", label: "GitHub" },
-  { value: "website", label: "Website" },
-  { value: "whatsapp", label: "WhatsApp" },
-  { value: "snapchat", label: "Snapchat" },
-  { value: "threads", label: "Threads" },
-  { value: "pinterest", label: "Pinterest" },
-] as const;
-
-export type SocialLink = {
-  platform: string;
-  url: string;
-};
-
-export type CardLayout = "classic" | "bold";
+export type { SocialLink, CardLayout };
 
 interface ProfileTabProps {
   user: User;
-}
-
-interface Profile {
-  display_name: string;
-  tagline: string;
-  bio: string;
-  avatar_url: string;
-  cta_url: string;
-  cta_label: string;
-  cta_embed: string;
-  social_links: SocialLink[];
-  card_layout: CardLayout;
 }
 
 export default function ProfileTab({ user }: ProfileTabProps) {
@@ -365,8 +332,8 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                   onDrop={onDrop}
                   onClick={() => !uploading && fileInputRef.current?.click()}
                   className={`flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${dragOver
-                      ? "border-primary bg-primary/10"
-                      : "border-border/50 bg-secondary/30 hover:border-primary/50 hover:bg-secondary/50"
+                    ? "border-primary bg-primary/10"
+                    : "border-border/50 bg-secondary/30 hover:border-primary/50 hover:bg-secondary/50"
                     }`}
                 >
                   {uploading ? (

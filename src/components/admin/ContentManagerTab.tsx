@@ -1,27 +1,11 @@
 import { useState, useEffect } from "react";
 import { apiClient as db } from "@/lib/apiClient";
+import type { Site, ContentBlock } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Save, ChevronDown, ChevronRight } from "lucide-react";
-
-type Site = {
-  id: string;
-  domain: string;
-  name: string | null;
-  last_scraped_at: string | null;
-};
-
-type ContentBlock = {
-  id: string;
-  site_id: string;
-  heading: string | null;
-  body: string | null;
-  category: string | null;
-  tags: string[] | null;
-  block_order: number | null;
-};
 
 const ContentManagerTab = ({ sites }: { sites: Site[] }) => {
   const [expandedSite, setExpandedSite] = useState<string | null>(null);

@@ -1,30 +1,11 @@
 import { useState } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import type { User, Site, ContentBlock } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Globe, Loader2, CheckCircle, XCircle, Trash2, RefreshCw } from "lucide-react";
-
-type Site = {
-  id: string;
-  domain: string;
-  name: string | null;
-  scrape_status: string;
-  page_count: number;
-  share_usage_limit: number;
-  last_scraped_at: string | null;
-  created_at: string;
-};
-
-type ContentBlock = {
-  id: string;
-  heading: string | null;
-  body: string | null;
-  images: string[];
-  category: string | null;
-  block_order: number;
-};
+import { timeAgo } from "@/lib/formatters";
 
 interface SiteImportTabProps {
   user: User;
@@ -40,18 +21,6 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
   const [selectedSite, setSelectedSite] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const { toast } = useToast();
-
-  const timeAgo = (dateStr: string | null) => {
-    if (!dateStr) return "Never";
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
-  };
 
   const fetchBlocks = async (siteId: string) => {
     const { data } = await db

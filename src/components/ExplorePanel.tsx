@@ -2,19 +2,13 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ArrowRight, Sparkles, Loader2 } from "lucide-react";
 import { apiClient as db } from "@/lib/apiClient";
+import { EXPLORE_SUGGESTIONS } from "@/lib/constants";
 import ReactMarkdown from "react-markdown";
 
 interface ExplorePanelProps {
   onSearch?: (query: string) => void;
   onClose?: () => void;
 }
-
-const SUGGESTIONS = [
-  "What services do you offer?",
-  "Tell me about Tanya",
-  "How much does it cost?",
-  "How can AI help social workers?",
-];
 
 const ExplorePanel = ({ onSearch, onClose }: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
@@ -103,7 +97,7 @@ const ExplorePanel = ({ onSearch, onClose }: ExplorePanelProps) => {
             >
               <p className="text-xs text-muted-foreground uppercase tracking-widest">Try asking</p>
               <div className="space-y-2">
-                {SUGGESTIONS.map((s) => (
+                {EXPLORE_SUGGESTIONS.map((s) => (
                   <button
                     key={s}
                     onClick={() => handleSearch(s)}

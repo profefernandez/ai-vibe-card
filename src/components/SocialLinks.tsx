@@ -4,11 +4,9 @@ import {
   Youtube, Github, Globe, MessageCircle, Camera, Pin,
   type LucideIcon,
 } from "lucide-react";
+import type { SocialLink } from "@/types";
 
-export type SocialLink = {
-  platform: string;
-  url: string;
-};
+export type { SocialLink };
 
 const ICON_MAP: Record<string, LucideIcon> = {
   phone: Phone,

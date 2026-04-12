@@ -8,17 +8,11 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-// ─── Public types ─────────────────────────────────────────────────────────────
+// ─── Public types (re-exported from @/types for backward compatibility) ───────
 
-export interface User {
-    id: string;
-    email: string;
-}
+export type { User, Session } from "@/types";
 
-interface Session {
-    user: User;
-    token: string;
-}
+import type { User, Session } from "@/types";
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 

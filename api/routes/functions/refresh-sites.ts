@@ -65,6 +65,22 @@ export async function handler(req: Request, res: Response): Promise<void> {
                     formattedUrl = `https://${formattedUrl}`;
                 }
 
+                // SSRF protection — validate URL before sending to Firecrawl
+                let parsedUrl: URL;
+                try {
+                    parsedUrl = new URL(formattedUrl);
+                } catch {
+                    throw new Error("Invalid URL");
+                }
+                if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+                    throw new Error("Only http/https URLs are allowed");
+                }
+                const hostname = parsedUrl.hostname;
+                const privatePatterns = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|0\.|169\.254\.|::1|localhost|fc00|fd00|fe80)/i;
+                if (privatePatterns.test(hostname)) {
+                    throw new Error("Internal/private addresses are not allowed");
+                }
+
                 const crawlResponse = await fetch("https://api.firecrawl.dev/v1/crawl", {
                     method: "POST",
                     headers: {

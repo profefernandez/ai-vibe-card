@@ -1,25 +1,11 @@
 import { useState, useEffect } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import type { User, ApiConnection } from "@/types";
+import { API_PROVIDERS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Loader2, Plug, Eye, EyeOff } from "lucide-react";
-
-type ApiConnection = {
-  id: string;
-  provider: string;
-  api_key_encrypted: string;
-  model_name: string;
-  is_active: boolean;
-};
-
-const PROVIDERS = [
-  { id: "openai", label: "OpenAI", defaultModel: "gpt-4o" },
-  { id: "anthropic", label: "Anthropic", defaultModel: "claude-3-sonnet" },
-  { id: "google", label: "Google Gemini", defaultModel: "gemini-pro" },
-  { id: "lemonade", label: "Launch Lemonade", defaultModel: "default" },
-];
 
 interface ApiConnectorTabProps {
   user: User;
@@ -92,7 +78,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
     setTesting(providerId);
     try {
       const { data, error } = await db.functions.invoke("test-api-connection", {
-        body: { provider: providerId, api_key: conn.api_key_encrypted },
+        body: { provider: providerId },
       });
       if (error) throw error;
       if (data?.success) {
@@ -117,7 +103,7 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {PROVIDERS.map((provider) => {
+        {API_PROVIDERS.map((provider) => {
           const conn = getConnection(provider.id);
           const hasKey = !!conn?.api_key_encrypted;
           return (

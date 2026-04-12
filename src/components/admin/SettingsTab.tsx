@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User } from "@/lib/apiClient";
+import type { User, SiteSettings, RobotDirective, CrawlerToggles } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,26 +10,10 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { applyTheme } from "@/lib/theme";
+import { ACCENT_COLORS } from "@/lib/constants";
 
 interface SettingsTabProps {
   user: User;
-}
-
-interface SiteSettings {
-  id: string;
-  domain: string;
-  share_usage_limit: number;
-}
-
-interface RobotDirective {
-  userAgent: string;
-  rules: { action: "allow" | "disallow"; path: string }[];
-}
-
-interface CrawlerToggles {
-  searchEngines: boolean;
-  socialPreviews: boolean;
-  aiBots: boolean;
 }
 
 /** Convert simple toggles → robots.txt directive array for storage. */
@@ -94,16 +78,7 @@ function directivesToToggles(directives: RobotDirective[]): CrawlerToggles {
   return { searchEngines, socialPreviews, aiBots };
 }
 
-const ACCENT_COLORS = [
-  { name: "amber", hsl: "38 95% 50%", bg: "bg-amber-500" },
-  { name: "blue", hsl: "217 91% 60%", bg: "bg-blue-500" },
-  { name: "green", hsl: "142 71% 45%", bg: "bg-green-600" },
-  { name: "purple", hsl: "262 83% 58%", bg: "bg-purple-500" },
-{ name: "rose", hsl: "347 77% 50%", bg: "bg-rose-500" },
-{ name: "teal", hsl: "172 66% 50%", bg: "bg-teal-500" },
-{ name: "orange", hsl: "25 95% 53%", bg: "bg-orange-500" },
-{ name: "cyan", hsl: "189 94% 43%", bg: "bg-cyan-600" },
-];
+
 
 const THEME_OPTIONS = [
   { value: "dark", label: "Dark", icon: Moon },

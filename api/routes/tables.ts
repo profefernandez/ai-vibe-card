@@ -49,24 +49,6 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     received_cards: ["owner_id", "sender_name", "sender_domain", "sender_avatar", "sender_tagline", "notes", "usage_count", "usage_limit"],
 };
 
-// Readable columns include "id" and "created_at" in addition to writable columns
-function getReadableColumns(table: string): Set<string> {
-    const cols = TABLE_COLUMNS[table] ?? [];
-    return new Set([...cols, "id", "created_at"]);
-}
-
-// ── Ownership column per table ────────────────────────────────────────────────
-// Maps each table to the column that identifies the owning user.
-// Used to enforce that authenticated users can only access their own data.
-const OWNER_COLUMN: Record<string, string> = {
-    profiles: "user_id",
-    sites: "user_id",
-    site_pages: "", // owned indirectly via sites
-    content_blocks: "", // owned indirectly via sites
-    ai_preferences: "user_id",
-    api_connections: "user_id",
-    received_cards: "owner_id",
-};
 
 function validateTable(table: string, res: any): boolean {
     if (!ALLOWED_TABLES.has(table)) {
@@ -119,12 +101,20 @@ function ownerColumn(table: string): string | null {
 }
 
 // ── SELECT ─────────────────────────────────────────────────────────────────────
-router.get("/:table", async (req, res) => {
+// All reads require JWT and are scoped to the authenticated user's data.
+router.get("/:table", requireAuth, async (req: AuthRequest, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 
     const { filter, order, limit, select } = req.query as Record<string, string | string[]>;
     const { clauses, values } = parseFilters(table, filter);
+
+    // Enforce ownership — user can only read their own rows
+    const ownCol = ownerColumn(table);
+    if (ownCol) {
+        values.push(req.user!.id);
+        clauses.push(`"${ownCol}" = $${values.length}`);
+    }
 
     // Validate select columns against allowlist
     let cols = "*";
@@ -156,6 +146,14 @@ router.get("/:table", async (req, res) => {
 
     try {
         const result = await db.query(sql, values);
+        // Strip raw API keys from api_connections responses
+        if (table === "api_connections") {
+            for (const row of result.rows) {
+                if (row.api_key_encrypted) {
+                    row.api_key_encrypted = "••••••••";
+                }
+            }
+        }
         res.json(result.rows);
     } catch (err) {
         console.error("SELECT error:", err);
