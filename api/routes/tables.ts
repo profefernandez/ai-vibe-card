@@ -22,6 +22,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
+import { encrypt } from "../lib/crypto.js";
 
 export const router = Router();
 
@@ -43,7 +44,7 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "updated_at"],
     sites: ["user_id", "domain", "name", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
-    content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "block_order"],
+    content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
     received_cards: ["owner_id", "sender_name", "sender_domain", "sender_avatar", "sender_tagline", "notes", "usage_count", "usage_limit"],
@@ -174,6 +175,10 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
     const cleaned = rows.map((r) => {
         const c = pickColumns(table, r);
         if (ownCol) c[ownCol] = req.user!.id;
+        // Encrypt API keys before storage
+        if (table === "api_connections" && typeof c.api_key_encrypted === "string" && c.api_key_encrypted) {
+            c.api_key_encrypted = encrypt(c.api_key_encrypted);
+        }
         return c;
     });
     if (cleaned.length === 0 || Object.keys(cleaned[0]).length === 0) {
@@ -221,6 +226,10 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
     if (Object.keys(cleaned).length === 0) {
         res.status(400).json({ error: "No valid columns to update" });
         return;
+    }
+    // Encrypt API keys before storage
+    if (table === "api_connections" && typeof cleaned.api_key_encrypted === "string" && cleaned.api_key_encrypted) {
+        cleaned.api_key_encrypted = encrypt(cleaned.api_key_encrypted);
     }
 
     const setClauses = Object.keys(cleaned).map((col, i) => {

@@ -10,6 +10,8 @@
 
 import type { Request, Response } from "express";
 import { db } from "../../db.js";
+import { sanitiseInput, filterOutput } from "../../lib/sanitise.js";
+import { logAudit } from "../../lib/audit.js";
 
 const LEMONADE_API_URL = "https://api.launchlemonade.app/v1/chat";
 
@@ -26,6 +28,14 @@ export async function handler(req: Request, res: Response): Promise<void> {
             return;
         }
 
+        // ── Server-side input sanitisation ────────────────────────────────
+        const sanitised = sanitiseInput(message);
+        if (sanitised.blocked) {
+            res.status(400).json({ error: sanitised.reason });
+            return;
+        }
+        const cleanMessage = sanitised.text;
+
         const apiKey = process.env.LEMONADE_API_KEY;
         const lemonadeId = process.env.LEMONADE_ID;
 
@@ -38,9 +48,19 @@ export async function handler(req: Request, res: Response): Promise<void> {
         let siteContext = "";
         try {
             if (site_id) {
+                // Validate site_id exists (prevents enumeration of arbitrary UUIDs)
+                const { rows: siteRows } = await db.query(
+                    `SELECT id FROM sites WHERE id = $1 LIMIT 1`,
+                    [site_id],
+                );
+                if (!siteRows.length) {
+                    res.status(404).json({ error: "Site not found" });
+                    return;
+                }
+
                 const { rows: blocks } = await db.query(
                     `SELECT heading, body FROM content_blocks
-                     WHERE site_id = $1
+                     WHERE site_id = $1 AND visibility = 'public'
                      ORDER BY block_order LIMIT 30`,
                     [site_id],
                 );
@@ -103,7 +123,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         const parts: string[] = [];
         if (injectionContext) parts.push(injectionContext);
         if (siteContext) parts.push(`[Latest website content]\n${siteContext}`);
-        parts.push(`[Visitor question]\n${message.trim()}`);
+        parts.push(`[Visitor question]\n${cleanMessage}`);
         const augmentedMessage = parts.join("\n\n");
 
         const payload: Record<string, string> = {
@@ -138,8 +158,17 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
 
         const data = await response.json();
+
+        // Audit log — track chat interactions
+        logAudit({
+            action: "lemonade_chat",
+            ip: req.ip,
+            userAgent: req.headers["user-agent"],
+            meta: { site_id, tokens_used: data.tokens_used, conversation_id: data.conversation_id },
+        });
+
         res.json({
-            response: data.response,
+            response: filterOutput(data.response ?? ""),
             conversation_id: data.conversation_id,
             tokens_used: data.tokens_used,
         });

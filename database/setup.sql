@@ -225,6 +225,8 @@ CREATE TABLE IF NOT EXISTS content_blocks (
     images      TEXT[]      NOT NULL DEFAULT '{}',
     tags        TEXT[]      NOT NULL DEFAULT '{}',
     category    TEXT        DEFAULT NULL,
+    visibility  TEXT        NOT NULL DEFAULT 'public'
+                            CHECK (visibility IN ('public', 'internal', 'draft')),
     block_order INTEGER     NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

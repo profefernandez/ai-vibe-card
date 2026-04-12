@@ -14,7 +14,7 @@ import { handler as refreshSites } from "./refresh-sites.js";
 export const router = Router();
 
 router.post("/query-content", requireAuth, queryContent);
-router.post("/scrape-site", scrapeSite);
+router.post("/scrape-site", requireAuth, scrapeSite);
 router.post("/test-api-connection", requireAuth, testApiConnection);
 router.post("/lemonade-chat", lemonadeChat);  // public-facing (visitor chat)
 router.post("/refresh-sites", refreshSites);

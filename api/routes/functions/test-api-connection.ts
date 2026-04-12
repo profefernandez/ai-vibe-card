@@ -11,6 +11,8 @@
 import type { Response } from "express";
 import type { AuthRequest } from "../../middleware/auth.js";
 import { db } from "../../db.js";
+import { decrypt, isEncrypted } from "../../lib/crypto.js";
+import { logAudit } from "../../lib/audit.js";
 
 export async function handler(req: AuthRequest, res: Response): Promise<void> {
     const { provider } = req.body as { provider?: string };
@@ -26,11 +28,13 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
             `SELECT api_key_encrypted FROM api_connections WHERE user_id = $1 AND provider = $2`,
             [req.user!.id, provider],
         );
-        const api_key = rows[0]?.api_key_encrypted;
-        if (!api_key) {
+        const raw = rows[0]?.api_key_encrypted;
+        if (!raw) {
             res.status(404).json({ success: false, error: "No API key stored for this provider" });
             return;
         }
+        // Decrypt if encrypted, support legacy plaintext gracefully
+        const api_key = isEncrypted(raw) ? decrypt(raw) : raw;
 
         let testUrl = "";
         let testHeaders: Record<string, string> = {};
@@ -60,9 +64,23 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
                 testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(api_key)}`;
                 break;
 
-            case "lemonade":
-                res.json({ success: true, message: "Key stored. Launch Lemonade integration ready." });
+            case "lemonade": {
+                // Verify the Lemonade key against their health/models endpoint
+                const lemonadeRes = await fetch("https://api.launchlemonade.app/v1/health", {
+                    headers: { Authorization: `Bearer ${api_key}` },
+                });
+                if (!lemonadeRes.ok) {
+                    res.json({ success: false, error: `Lemonade API returned ${lemonadeRes.status}` });
+                } else {
+                    res.json({ success: true, message: "Lemonade connection verified." });
+                }
+                logAudit({
+                    userId: req.user!.id,
+                    action: "test_api_connection",
+                    meta: { provider, success: lemonadeRes.ok },
+                });
                 return;
+            }
 
             default:
                 res.status(400).json({ success: false, error: "Unknown provider" });
@@ -73,9 +91,37 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         if (testBody) fetchOpts.body = testBody;
 
         const apiRes = await fetch(testUrl, fetchOpts);
-        const success = apiRes.ok;
+        let success = apiRes.ok;
+        let errorDetail: string | null = null;
 
-        res.json({ success, error: success ? null : `API returned ${apiRes.status}` });
+        // Validate response body structure (not just HTTP status)
+        if (success) {
+            try {
+                const body = await apiRes.json();
+                if (provider === "openai" && !Array.isArray((body as any)?.data)) {
+                    success = false;
+                    errorDetail = "Unexpected response format from OpenAI";
+                }
+                if (provider === "google" && !Array.isArray((body as any)?.models)) {
+                    success = false;
+                    errorDetail = "Unexpected response format from Google";
+                }
+                // Anthropic returns a message object — if we got this far, status was ok
+            } catch {
+                success = false;
+                errorDetail = "Could not parse API response";
+            }
+        } else {
+            errorDetail = `API returned ${apiRes.status}`;
+        }
+
+        logAudit({
+            userId: req.user!.id,
+            action: "test_api_connection",
+            meta: { provider, success },
+        });
+
+        res.json({ success, error: errorDetail });
     } catch (err) {
         console.error("test-api-connection error:", err);
         res.status(500).json({

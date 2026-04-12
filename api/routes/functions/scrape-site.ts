@@ -7,22 +7,10 @@
  * Requires auth: Bearer JWT (user must own the site record).
  */
 
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import { db } from "../../db.js";
-import { requireAuth, type AuthRequest } from "../../middleware/auth.js";
-
-// Inline auth check (not middleware — we want to handle errors ourselves)
-async function verifyAuth(req: Request): Promise<{ id: string; email: string } | null> {
-    const header = req.headers.authorization;
-    if (!header?.startsWith("Bearer ")) return null;
-    try {
-        const jwt = await import("jsonwebtoken");
-        const payload = jwt.default.verify(header.slice(7), process.env.JWT_SECRET as string) as any;
-        return { id: payload.sub, email: payload.email };
-    } catch {
-        return null;
-    }
-}
+import { type AuthRequest } from "../../middleware/auth.js";
+import { logAudit } from "../../lib/audit.js";
 
 type Block = {
     heading: string | null;
@@ -60,8 +48,8 @@ function parseMarkdownToBlocks(markdown: string): Block[] {
     return blocks.filter((b) => b.heading || (b.body && b.body.length > 10));
 }
 
-export async function handler(req: Request, res: Response): Promise<void> {
-    const user = await verifyAuth(req);
+export async function handler(req: AuthRequest, res: Response): Promise<void> {
+    const user = req.user;
     if (!user) {
         res.status(401).json({ success: false, error: "Unauthorized" });
         return;
@@ -114,6 +102,17 @@ export async function handler(req: Request, res: Response): Promise<void> {
     }
 
     await db.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site_id]);
+
+    // Audit log — track scrape actions
+    logAudit({
+        userId: user.id,
+        action: "scrape_site",
+        tableName: "sites",
+        recordId: site_id,
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        meta: { domain: formattedUrl },
+    });
 
     // Clear old data so re-scrape is a clean replace
     await db.query("DELETE FROM content_blocks WHERE site_id = $1", [site_id]);

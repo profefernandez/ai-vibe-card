@@ -50,9 +50,31 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "2mb" }));
 
+// Security header — enforce HTTPS via HSTS when behind TLS-terminating proxy
+app.use((_req, res, next) => {
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+    next();
+});
+
 // Rate limiters
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, please try again later" } });
-const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many requests, please slow down" } });
+const chatLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { error: "Too many requests, please slow down" },
+    // Use JWT user id when available, fall back to IP
+    keyGenerator: (req) => {
+        try {
+            const header = req.headers.authorization;
+            if (header?.startsWith("Bearer ")) {
+                const jwt = require("jsonwebtoken");
+                const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET) as any;
+                if (payload?.sub) return `user:${payload.sub}`;
+            }
+        } catch { /* fall through to IP */ }
+        return req.ip || "unknown";
+    },
+});
 
 // ── Static file serving for uploaded avatars ──────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

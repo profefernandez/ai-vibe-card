@@ -11,6 +11,8 @@
 
 import type { Request, Response } from "express";
 import { db } from "../../db.js";
+import { sanitiseInput } from "../../lib/sanitise.js";
+import { logAudit } from "../../lib/audit.js";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {
@@ -24,11 +26,19 @@ export async function handler(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        // Fetch content blocks scoped to the requested site
+        // Server-side input sanitisation
+        const sanitised = sanitiseInput(query);
+        if (sanitised.blocked) {
+            res.status(400).json({ success: false, error: sanitised.reason });
+            return;
+        }
+        const cleanQuery = sanitised.text;
+
+        // Fetch content blocks scoped to the requested site (public only)
         const { rows: blocks } = await db.query(
             `SELECT id, heading, body, images, category, tags, block_order, page_id
              FROM content_blocks
-             WHERE site_id = $1
+             WHERE site_id = $1 AND visibility = 'public'
              ORDER BY block_order LIMIT 200`,
             [site_id],
         );
@@ -68,7 +78,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                     },
                     {
                         role: "user",
-                        content: `Query: "${query}"\n\nContent blocks:\n${blockSummaries}`,
+                        content: `Query: "${cleanQuery}"\n\nContent blocks:\n${blockSummaries}`,
                     },
                 ],
             }),
@@ -92,6 +102,15 @@ export async function handler(req: Request, res: Response): Promise<void> {
         const matchedBlocks = indices
             .filter((i) => i >= 0 && i < blocks.length)
             .map((i) => blocks[i]);
+
+        // Audit log — track content queries
+        logAudit({
+            userId: (req as any).user?.id,
+            action: "query_content",
+            ip: req.ip,
+            userAgent: req.headers["user-agent"],
+            meta: { site_id, results: matchedBlocks.length },
+        });
 
         res.json({ success: true, blocks: matchedBlocks });
     } catch (err) {
