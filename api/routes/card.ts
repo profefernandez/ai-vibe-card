@@ -124,7 +124,7 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
         );
         if (ownerUser.length > 0) {
             const requesterName = requesterProfile[0]?.display_name || "Someone";
-            sendEmail(connectionRequestEmail(ownerUser[0].email, requesterName, safeMessage)).catch(() => {});
+            sendEmail(connectionRequestEmail(ownerUser[0].email, requesterName, safeMessage)).catch(() => { });
         }
 
         await logAudit({ userId: requesterId, action: "connection_request", tableName: "connections", recordId: newConn[0].id, ip: req.ip, userAgent: req.headers["user-agent"] });
@@ -203,7 +203,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res) => {
             );
             if (requesterUser.length > 0) {
                 const ownerName = ownerProfile[0]?.display_name || "Someone";
-                sendEmail(connectionApprovedEmail(requesterUser[0].email, ownerName)).catch(() => {});
+                sendEmail(connectionApprovedEmail(requesterUser[0].email, ownerName)).catch(() => { });
             }
         }
 

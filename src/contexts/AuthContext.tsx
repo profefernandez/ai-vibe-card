@@ -25,10 +25,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         apiClient.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
+            if (session?.user) {
+                setUser(session.user);
+            } else if (!import.meta.env.PROD) {
+                // No real session in dev mode — use dev user so admin is accessible
+                console.warn("[AuthContext] No session — using dev user fallback");
+                setUser({ id: "dev-user", email: "dev@localhost" });
+            }
             setLoading(false);
         }).catch(() => {
-            // API unreachable — fall back to dev user in non-production only
             if (!import.meta.env.PROD) {
                 console.warn("[AuthContext] API unreachable — using dev user fallback");
                 setUser({ id: "dev-user", email: "dev@localhost" });

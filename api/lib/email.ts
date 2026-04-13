@@ -17,11 +17,11 @@ const isConfigured = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
 
 const transporter = isConfigured
     ? nodemailer.createTransport({
-          host: SMTP_HOST,
-          port: SMTP_PORT,
-          secure: SMTP_PORT === 465,
-          auth: { user: SMTP_USER, pass: SMTP_PASS },
-      })
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: { user: SMTP_USER, pass: SMTP_PASS },
+    })
     : null;
 
 interface EmailOpts {
