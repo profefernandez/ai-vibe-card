@@ -99,6 +99,9 @@ FIRECRAWL_API_KEY=
 AI_API_KEY=
 AI_API_URL=
 AI_MODEL=
+
+# Cron — site refresh secret (must match what the cron job sends)
+REFRESH_SECRET=
 ENVTEMPLATE
     info "Created .env.example (fill in values on the server)"
 fi

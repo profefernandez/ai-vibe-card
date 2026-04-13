@@ -6,11 +6,12 @@ import { EXPLORE_SUGGESTIONS } from "@/lib/constants";
 import ReactMarkdown from "react-markdown";
 
 interface ExplorePanelProps {
+  siteId?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
 }
 
-const ExplorePanel = ({ onSearch, onClose }: ExplorePanelProps) => {
+const ExplorePanel = ({ siteId, onSearch, onClose }: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -30,7 +31,7 @@ const ExplorePanel = ({ onSearch, onClose }: ExplorePanelProps) => {
 
     try {
       const { data, error } = await db.functions.invoke("lemonade-chat", {
-        body: { message: searchText, conversation_id: conversationId },
+        body: { message: searchText, conversation_id: conversationId, ...(siteId ? { site_id: siteId } : {}) },
       });
 
       if (error) throw error;

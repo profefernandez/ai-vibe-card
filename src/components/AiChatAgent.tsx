@@ -6,11 +6,12 @@ import type { ChatMessage } from "@/types";
 import { QUICK_PROMPTS } from "@/lib/constants";
 
 interface AiChatAgentProps {
+  siteId?: string | null;
   initialMessage?: string | null;
   onMessageConsumed?: () => void;
 }
 
-const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) => {
+const AiChatAgent = ({ siteId, initialMessage, onMessageConsumed }: AiChatAgentProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -45,7 +46,7 @@ const AiChatAgent = ({ initialMessage, onMessageConsumed }: AiChatAgentProps) =>
 
     try {
       const { data, error } = await db.functions.invoke("lemonade-chat", {
-        body: { message, conversation_id: conversationId },
+        body: { message, conversation_id: conversationId, ...(siteId ? { site_id: siteId } : {}) },
       });
 
       if (error) throw error;

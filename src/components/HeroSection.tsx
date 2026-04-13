@@ -25,6 +25,7 @@ const HeroSection = () => {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [siteId, setSiteId] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch the first profile (site owner)
@@ -75,6 +76,17 @@ const HeroSection = () => {
           setMetaTag("og:type", "website", true);
           setMetaTag("twitter:card", "summary_large_image");
         }
+      });
+
+    // Fetch the first verified site (for AI content context)
+    db
+      .from("sites")
+      .select("id")
+      .eq("verified", true)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.id) setSiteId(data.id);
       });
   }, []);
 
@@ -313,7 +325,7 @@ const HeroSection = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                <ExplorePanel onClose={closeExplore} />
+                <ExplorePanel siteId={siteId} onClose={closeExplore} />
               </motion.div>
             )}
           </AnimatePresence>

@@ -35,9 +35,8 @@ src/
 │   └── NotFound.tsx      # 404 fallback
 ├── components/
 │   ├── HeroSection.tsx   # Main animated business card (drag-to-explore gesture)
-│   ├── ExplorePanel.tsx  # AI content search panel (calls query-content edge fn)
+│   ├── ExplorePanel.tsx  # AI content search panel (calls lemonade-chat with site context)
 │   ├── AiChatAgent.tsx   # Full AI chat agent component
-│   ├── AiChatBar.tsx     # Compact chat bar
 │   ├── SocialLinks.tsx   # Social media icon links
 │   ├── LinkCategories.tsx
 │   ├── NavLink.tsx

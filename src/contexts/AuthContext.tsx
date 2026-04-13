@@ -18,13 +18,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // DEV BYPASS: skip auth entirely when API is not running
-        if (!import.meta.env.PROD) {
-            setUser({ id: "dev-user", email: "dev@localhost" });
-            setLoading(false);
-            return;
-        }
-
         const {
             data: { subscription },
         } = apiClient.auth.onAuthStateChange((_event, session) => {
@@ -33,6 +26,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         apiClient.auth.getSession().then(({ data: { session } }) => {
             setUser(session?.user ?? null);
+            setLoading(false);
+        }).catch(() => {
+            // API unreachable — fall back to dev user in non-production only
+            if (!import.meta.env.PROD) {
+                console.warn("[AuthContext] API unreachable — using dev user fallback");
+                setUser({ id: "dev-user", email: "dev@localhost" });
+            }
             setLoading(false);
         });
 

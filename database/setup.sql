@@ -345,20 +345,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_auth ON audit_log (action, created_at DESC)
     WHERE action IN ('login', 'signup', 'logout', 'failed_login', 'password_reset');
 
 
--- -------------------------------------------------------
--- RATE_LIMITS  (OWASP A07 — Brute-force & DDoS protection)
--- -------------------------------------------------------
-CREATE TABLE IF NOT EXISTS rate_limits (
-    id            BIGSERIAL   PRIMARY KEY,
-    identifier    TEXT        NOT NULL,   -- IP address or user_id
-    action        TEXT        NOT NULL,   -- 'login', 'signup', 'api_call', etc.
-    attempts      INTEGER     NOT NULL DEFAULT 1,
-    window_start  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    blocked_until TIMESTAMPTZ DEFAULT NULL,
-    CONSTRAINT uq_rate UNIQUE (identifier, action)
-);
-
-CREATE INDEX IF NOT EXISTS idx_rate_ident ON rate_limits (identifier, action);
+-- NOTE: Rate limiting is handled in-memory by express-rate-limit middleware.
+-- No database table needed for single-server deployment.
 
 
 -- =============================================================================

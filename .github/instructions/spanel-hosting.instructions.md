@@ -96,6 +96,7 @@ The API server requires these env vars in `api/.env`:
 | `AI_API_KEY`      | No       | OpenAI-compatible API key                          |
 | `AI_API_URL`      | No       | AI gateway base URL                                |
 | `AI_MODEL`        | No       | Model name for AI features                         |
+| `REFRESH_SECRET`  | No       | Shared secret for cron-triggered site refresh      |
 
 *Defaults to localhost origins if unset — must be set in production.
 
@@ -131,3 +132,14 @@ pm2 restart aivibe-api
 # Check status:
 pm2 status
 ```
+
+## Cron Jobs
+
+The `refresh-sites` endpoint re-scrapes stale verified sites. Set up a cron job via SPanel:
+
+```bash
+# Every 6 hours — refresh stale sites
+0 */6 * * * /home/<username>/aivibe/cron/refresh-sites.sh >> /home/<username>/aivibe/cron/refresh.log 2>&1
+```
+
+The script reads `REFRESH_SECRET` from `api/.env` automatically. See [cron/refresh-sites.sh](../../cron/refresh-sites.sh).
