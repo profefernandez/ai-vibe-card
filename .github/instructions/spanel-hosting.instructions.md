@@ -97,6 +97,11 @@ The API server requires these env vars in `api/.env`:
 | `AI_API_URL`      | No       | AI gateway base URL                                |
 | `AI_MODEL`        | No       | Model name for AI features                         |
 | `REFRESH_SECRET`  | No       | Shared secret for cron-triggered site refresh      |
+| `SMTP_HOST`       | No       | SMTP server hostname for email notifications       |
+| `SMTP_PORT`       | No       | SMTP port (default: 587)                           |
+| `SMTP_USER`       | No       | SMTP username / email                              |
+| `SMTP_PASS`       | No       | SMTP password                                      |
+| `SMTP_FROM`       | No       | Sender address (defaults to SMTP_USER)             |
 
 *Defaults to localhost origins if unset — must be set in production.
 

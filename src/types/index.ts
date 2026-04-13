@@ -34,6 +34,7 @@ export interface Profile {
     cta_embed: string;
     social_links: SocialLink[];
     card_layout: CardLayout;
+    slug: string;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
@@ -83,18 +84,24 @@ export interface ApiConnection {
     is_active: boolean;
 }
 
-// ─── Received Cards ───────────────────────────────────────────────────────────
+// ─── Connections ──────────────────────────────────────────────────────────────────────────
 
-export interface ReceivedCard {
+export type ConnectionStatus = "pending" | "approved" | "declined";
+
+export interface Connection {
     id: string;
-    sender_name: string;
-    sender_domain: string;
-    sender_avatar: string;
-    sender_tagline: string;
-    notes: string;
-    usage_count: number;
-    usage_limit: number;
+    requester_id: string;
+    owner_id: string;
+    status: ConnectionStatus;
+    message: string;
     created_at: string;
+    updated_at: string;
+    approved_at: string | null;
+    // Joined fields from profile
+    display_name?: string;
+    avatar_url?: string;
+    tagline?: string;
+    slug?: string;
 }
 
 // ─── AI Preferences ──────────────────────────────────────────────────────────

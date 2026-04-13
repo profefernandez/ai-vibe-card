@@ -24,6 +24,7 @@ import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
 import { router as uploadRouter } from "./routes/upload.js";
+import { router as cardRouter } from "./routes/card.js";
 import { db } from "./db.js";
 
 // ── Startup validation ────────────────────────────────────────────────────────
@@ -140,6 +141,15 @@ app.use("/api/functions/query-content", rateLimit({
 }));
 app.use("/api/functions", functionsRouter);
 app.use("/api/upload", uploadRouter);
+app.use("/api/card", cardRouter);
+app.use("/api/connections", cardRouter);
+
+// Rate limit connection requests (POST to /api/card/:slug/connect)
+app.use("/api/card/:slug/connect", rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { error: "Too many connection requests, please try again later" },
+}));
 
 // Health check
 app.get("/api/health", (_req, res) => res.json({ ok: true }));

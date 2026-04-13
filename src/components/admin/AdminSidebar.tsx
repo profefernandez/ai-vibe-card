@@ -26,7 +26,7 @@ const mainItems = [
   { title: "Site Import", value: "import" as AdminSection, icon: Globe },
   { title: "Content", value: "content" as AdminSection, icon: FileText },
   { title: "AI Training", value: "ai" as AdminSection, icon: Brain },
-  { title: "Received Cards", value: "cards" as AdminSection, icon: CreditCard },
+  { title: "Connections", value: "cards" as AdminSection, icon: CreditCard },
 ];
 
 const accountItems = [

@@ -12,7 +12,7 @@ import SiteImportTab from "@/components/admin/SiteImportTab";
 import ContentManagerTab from "@/components/admin/ContentManagerTab";
 import ApiConnectorTab from "@/components/admin/ApiConnectorTab";
 import AiTrainingTab from "@/components/admin/AiTrainingTab";
-import ReceivedCardsTab from "@/components/admin/ReceivedCardsTab";
+import ConnectionsTab from "@/components/admin/ConnectionsTab";
 import ProfileTab from "@/components/admin/ProfileTab";
 import SettingsTab from "@/components/admin/SettingsTab";
 
@@ -20,7 +20,7 @@ const sectionTitles: Record<AdminSection, string> = {
   import: "Site Import",
   content: "Content Manager",
   ai: "AI Training",
-  cards: "Received Cards",
+  cards: "Connections",
   api: "API Connectors",
   profile: "Profile / Card Info",
   settings: "Settings",
@@ -87,7 +87,7 @@ const Admin = () => {
       case "ai":
         return <AiTrainingTab user={user} />;
       case "cards":
-        return <ReceivedCardsTab user={user} />;
+        return <ConnectionsTab user={user} />;
       case "profile":
         return <ProfileTab user={user} />;
       case "settings":

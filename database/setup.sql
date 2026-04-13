@@ -14,7 +14,7 @@
 --   A01 Broken Access Control   → Least-privilege DB user; no DDL grants
 --   A02 Cryptographic Failures  → Passwords via bcrypt; API keys encrypted at app layer
 --   A03 Injection               → Use parameterized queries in ALL app code
---   A04 Insecure Design         → Audit log + rate_limits tables included
+--   A04 Insecure Design         → Audit log table included
 --   A05 Security Misconfiguration → App user has SELECT/INSERT/UPDATE/DELETE only
 --   A07 Auth Failures           → sessions table with expiry; rate limiting
 --   A09 Logging                 → audit_log captures sensitive actions
@@ -158,10 +158,14 @@ CREATE TABLE IF NOT EXISTS profiles (
     og_image_url  TEXT        NOT NULL DEFAULT '',
     twitter_handle TEXT       NOT NULL DEFAULT '',
     robots_txt    JSONB       NOT NULL DEFAULT '[{"userAgent":"*","rules":[{"action":"allow","path":"/"}]}]',
+    slug          TEXT        NOT NULL DEFAULT '',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_profiles_user UNIQUE (user_id)
+    CONSTRAINT uq_profiles_user UNIQUE (user_id),
+    CONSTRAINT uq_profiles_slug UNIQUE (slug)
 );
+
+CREATE INDEX IF NOT EXISTS idx_profiles_slug ON profiles (slug) WHERE slug <> '';
 
 CREATE TRIGGER trg_profiles_updated_at
     BEFORE UPDATE ON profiles
@@ -296,23 +300,31 @@ CREATE INDEX IF NOT EXISTS idx_api_user ON api_connections (user_id);
 
 
 -- -------------------------------------------------------
--- RECEIVED_CARDS  (visitor card exchanges / leads)
+-- CONNECTIONS  (card-to-card networking between users)
+-- Both requester and owner must have accounts.
+-- Status flow: pending → approved | declined
 -- -------------------------------------------------------
-CREATE TABLE IF NOT EXISTS received_cards (
+CREATE TABLE IF NOT EXISTS connections (
     id              UUID        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    requester_id    UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     owner_id        UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    sender_name     TEXT        NOT NULL DEFAULT '',
-    sender_domain   TEXT        DEFAULT '',
-    sender_avatar   TEXT        DEFAULT '',
-    sender_tagline  TEXT        DEFAULT '',
-    sender_site_id  UUID        DEFAULT NULL REFERENCES sites (id) ON DELETE SET NULL,
-    notes           TEXT        DEFAULT '',
-    usage_count     INTEGER     NOT NULL DEFAULT 0 CHECK (usage_count >= 0),
-    usage_limit     INTEGER     NOT NULL DEFAULT 10 CHECK (usage_limit >= 0),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    status          TEXT        NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'approved', 'declined')),
+    message         TEXT        NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    approved_at     TIMESTAMPTZ DEFAULT NULL,
+    CONSTRAINT uq_connections_pair UNIQUE (requester_id, owner_id),
+    CONSTRAINT ck_connections_no_self CHECK (requester_id <> owner_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_cards_owner ON received_cards (owner_id);
+CREATE INDEX IF NOT EXISTS idx_connections_owner     ON connections (owner_id);
+CREATE INDEX IF NOT EXISTS idx_connections_requester ON connections (requester_id);
+CREATE INDEX IF NOT EXISTS idx_connections_status    ON connections (owner_id, status);
+
+CREATE TRIGGER trg_connections_updated_at
+    BEFORE UPDATE ON connections
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
 
 -- =============================================================================

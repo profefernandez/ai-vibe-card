@@ -35,20 +35,20 @@ const ALLOWED_TABLES = new Set([
     "content_blocks",
     "ai_preferences",
     "api_connections",
-    "received_cards",
+    "connections",
 ]);
 
 // ── Column allowlist per table (prevents arbitrary column injection) ───────────
 // All non-listed columns are stripped on INSERT/UPDATE.
 // "id" is always safe to read but never writable.
 const TABLE_COLUMNS: Record<string, string[]> = {
-    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "updated_at"],
+    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "slug", "updated_at"],
     sites: ["user_id", "domain", "name", "verified", "verification_token", "verification_method", "verified_at", "verification_expires_at", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
-    received_cards: ["owner_id", "sender_name", "sender_domain", "sender_avatar", "sender_tagline", "notes", "usage_count", "usage_limit"],
+    connections: ["requester_id", "owner_id", "status", "message", "approved_at"],
 };
 
 
@@ -97,7 +97,7 @@ function pickColumns(table: string, data: Record<string, unknown>): Record<strin
 /** Get the ownership column for a table (if any) */
 function ownerColumn(table: string): string | null {
     if (["profiles", "sites", "ai_preferences", "api_connections"].includes(table)) return "user_id";
-    if (table === "received_cards") return "owner_id";
+    if (table === "connections") return "owner_id";
     // site_pages and content_blocks use site_id — ownership verified via site table
     return null;
 }
