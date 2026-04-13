@@ -160,11 +160,10 @@ export default function MiniCard({ connection: c, userId, onAction }: MiniCardPr
                             {messages.map((m, i) => (
                                 <div
                                     key={i}
-                                    className={`text-xs rounded-lg px-3 py-2 ${
-                                        m.role === "user"
+                                    className={`text-xs rounded-lg px-3 py-2 ${m.role === "user"
                                             ? "bg-primary/10 text-foreground ml-6"
                                             : "bg-secondary/30 text-foreground mr-6"
-                                    }`}
+                                        }`}
                                 >
                                     {m.content}
                                 </div>

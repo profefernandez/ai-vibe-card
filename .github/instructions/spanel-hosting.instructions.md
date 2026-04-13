@@ -102,6 +102,8 @@ The API server requires these env vars in `api/.env`:
 | `SMTP_USER`       | No       | SMTP username / email                              |
 | `SMTP_PASS`       | No       | SMTP password                                      |
 | `SMTP_FROM`       | No       | Sender address (defaults to SMTP_USER)             |
+| `LEMONADE_API_KEY`| No       | LaunchLemonade API key (for AI chat + web search)  |
+| `LEMONADE_ID`     | No       | LaunchLemonade agent ID                            |
 
 *Defaults to localhost origins if unset — must be set in production.
 

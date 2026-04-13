@@ -16,7 +16,8 @@
 
 import express from "express";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
+import rateLimit, { type Request as RLRequest } from "express-rate-limit";
+import { ipKeyGenerator } from "express-rate-limit";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -26,6 +27,12 @@ import { router as functionsRouter } from "./routes/functions/index.js";
 import { router as uploadRouter } from "./routes/upload.js";
 import { router as cardRouter } from "./routes/card.js";
 import { db } from "./db.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env BEFORE validation so env vars are available
+dotenv.config();
 
 // ── Startup validation ────────────────────────────────────────────────────────
 const REQUIRED_ENV = ["DATABASE_URL", "JWT_SECRET"] as const;
@@ -43,11 +50,6 @@ for (const key of REQUIRED_HEX_ENV) {
         process.exit(1);
     }
 }
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -96,25 +98,24 @@ app.use((req, res, next) => {
     res.status(403).json({ error: "Forbidden: origin not allowed" });
 });
 
-// Rate limiters
+// Rate limiters — shared key generator: prefer JWT user id, fall back to IPv6-safe IP
+function userOrIpKey(req: RLRequest): string {
+    try {
+        const header = req.headers.authorization;
+        if (header?.startsWith("Bearer ")) {
+            const jwt = require("jsonwebtoken");
+            const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET) as any;
+            if (payload?.sub) return `user:${payload.sub}`;
+        }
+    } catch { /* fall through to IP */ }
+    return ipKeyGenerator(req);
+}
+
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, please try again later" } });
-const chatLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 30,
-    message: { error: "Too many requests, please slow down" },
-    // Use JWT user id when available, fall back to IP
-    keyGenerator: (req) => {
-        try {
-            const header = req.headers.authorization;
-            if (header?.startsWith("Bearer ")) {
-                const jwt = require("jsonwebtoken");
-                const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET) as any;
-                if (payload?.sub) return `user:${payload.sub}`;
-            }
-        } catch { /* fall through to IP */ }
-        return req.ip || "unknown";
-    },
-});
+const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many requests, please slow down" }, keyGenerator: userOrIpKey });
+const queryContentLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: "Too many queries, please slow down" }, keyGenerator: userOrIpKey });
+const connectLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many connection requests, please try again later" } });
+const connectionQueryLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, message: { error: "Too many AI queries, please slow down" }, keyGenerator: userOrIpKey });
 
 // ── Static file serving for uploaded avatars ──────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -194,8 +195,8 @@ app.get("/robots.txt", async (_req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-    console.log(`AI Vibe Card API listening on port ${PORT}`);
+app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`AI Vibe Card API listening on 0.0.0.0:${PORT}`);
 });
 
 export default app;
