@@ -15,6 +15,7 @@ import { db } from "../../db.js";
 import { handler as scrapeSiteHandler } from "./scrape-site.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
 import { promises as dns } from "node:dns";
+import { timingSafeEqual } from "node:crypto";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {
@@ -25,7 +26,13 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
 
         const authHeader = req.headers.authorization;
-        if (!authHeader || authHeader !== `Bearer ${secret}`) {
+        if (!authHeader?.startsWith("Bearer ")) {
+            res.status(401).json({ error: "Invalid refresh secret" });
+            return;
+        }
+        const provided = Buffer.from(authHeader.slice(7));
+        const expected = Buffer.from(secret);
+        if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
             res.status(401).json({ error: "Invalid refresh secret" });
             return;
         }

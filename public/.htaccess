@@ -1,0 +1,65 @@
+# =============================================================================
+# AI Vibe Card — Apache .htaccess for SPanel VPS
+#
+# This file sits in public_html/ (your domain's document root).
+# Apache serves the React SPA directly for static assets.
+# API and upload requests are proxied to the Express server on port 3001.
+#
+# Requires: mod_rewrite and mod_proxy (enabled by default on SPanel)
+# =============================================================================
+
+# Disable default directory listing and index behaviour
+DirectoryIndex disabled
+Options -Indexes
+
+# ── Rewrite Engine ────────────────────────────────────────────────────────────
+RewriteEngine On
+
+# ── Proxy: /api/* → Express API on port 3001 ─────────────────────────────────
+# All API calls are forwarded to the Node.js backend.
+RewriteRule ^api/(.*)$ http://127.0.0.1:3001/api/$1 [P,L]
+
+# ── Proxy: /uploads/* → Express static file server ───────────────────────────
+# Avatar images and user uploads served by Express.
+RewriteRule ^uploads/(.*)$ http://127.0.0.1:3001/uploads/$1 [P,L]
+
+# ── Static files: serve directly from public_html ─────────────────────────────
+# If the request matches a real file (JS, CSS, images), serve it as-is.
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# ── React SPA fallback ────────────────────────────────────────────────────────
+# All other routes serve index.html so React Router handles client-side routing.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ /index.html [L]
+
+# ── Security headers (Apache layer, supplements Express headers) ──────────────
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always set X-Frame-Options "DENY"
+    # Prevent MIME sniffing
+    Header always set X-Content-Type-Options "nosniff"
+    # Referrer policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ── Caching for static assets ────────────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    # Vite hashed assets — cache aggressively
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 year"
+    # HTML — no cache (so new deploys are picked up)
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ── Compression ──────────────────────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>

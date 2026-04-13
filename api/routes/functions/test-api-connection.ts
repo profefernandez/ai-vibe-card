@@ -70,7 +70,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
                     headers: { Authorization: `Bearer ${api_key}` },
                 });
                 if (!lemonadeRes.ok) {
-                    res.json({ success: false, error: `Lemonade API returned ${lemonadeRes.status}` });
+                    res.json({ success: false, error: "Lemonade API connection failed" });
                 } else {
                     res.json({ success: true, message: "Lemonade connection verified." });
                 }
@@ -112,7 +112,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
                 errorDetail = "Could not parse API response";
             }
         } else {
-            errorDetail = `API returned ${apiRes.status}`;
+            errorDetail = "API connection failed — check your key and try again";
         }
 
         logAudit({
@@ -126,7 +126,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         console.error("test-api-connection error:", err);
         res.status(500).json({
             success: false,
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: "Connection test failed. Please verify your API key and try again.",
         });
     }
 }

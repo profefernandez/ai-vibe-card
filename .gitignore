@@ -30,3 +30,7 @@ dist-ssr
 
 # Uploaded files (avatars etc.)
 api/uploads/
+
+# Deploy artifacts
+.deploy/
+ai-vibe-card-deploy.tar.gz

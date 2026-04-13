@@ -26,6 +26,23 @@ import { router as functionsRouter } from "./routes/functions/index.js";
 import { router as uploadRouter } from "./routes/upload.js";
 import { db } from "./db.js";
 
+// ── Startup validation ────────────────────────────────────────────────────────
+const REQUIRED_ENV = ["DATABASE_URL", "JWT_SECRET"] as const;
+const REQUIRED_HEX_ENV = ["ENCRYPTION_KEY"] as const;
+for (const key of REQUIRED_ENV) {
+    if (!process.env[key]) {
+        console.error(`FATAL: Missing required environment variable: ${key}`);
+        process.exit(1);
+    }
+}
+for (const key of REQUIRED_HEX_ENV) {
+    const val = process.env[key];
+    if (!val || val.length !== 64 || !/^[0-9a-f]{64}$/i.test(val)) {
+        console.error(`FATAL: ${key} must be a 64-character hex string (32 bytes). Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`);
+        process.exit(1);
+    }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -50,10 +67,32 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "2mb" }));
 
-// Security header — enforce HTTPS via HSTS when behind TLS-terminating proxy
+// Security headers
 app.use((_req, res, next) => {
-    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+    // HSTS with preload
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+    // Content Security Policy
+    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https:; connect-src 'self' https:; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'");
+    // Prevent MIME-type sniffing
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // Clickjacking protection
+    res.setHeader("X-Frame-Options", "DENY");
+    // XSS filter (legacy browsers)
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    // Referrer policy
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    // Permissions policy
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     next();
+});
+
+// CSRF protection — validate Origin header on state-changing requests
+app.use((req, res, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+    const origin = req.headers.origin;
+    // Allow server-to-server (no origin) and CORS-validated origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return next();
+    res.status(403).json({ error: "Forbidden: origin not allowed" });
 });
 
 // Rate limiters
@@ -83,6 +122,22 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/tables", tablesRouter);
 app.use("/api/functions/lemonade-chat", chatLimiter);
+app.use("/api/functions/query-content", rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    message: { error: "Too many queries, please slow down" },
+    keyGenerator: (req) => {
+        try {
+            const header = req.headers.authorization;
+            if (header?.startsWith("Bearer ")) {
+                const jwt = require("jsonwebtoken");
+                const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET) as any;
+                if (payload?.sub) return `user:${payload.sub}`;
+            }
+        } catch { /* fall through to IP */ }
+        return req.ip || "unknown";
+    },
+}));
 app.use("/api/functions", functionsRouter);
 app.use("/api/upload", uploadRouter);
 

@@ -1,13 +1,17 @@
 /**
- * Auth routes: register + login.
- * POST /api/auth/register  — create new user account
- * POST /api/auth/login     — return JWT on valid credentials
+ * Auth routes: register, login, logout, revoke sessions.
+ * POST   /api/auth/register      — create new user account
+ * POST   /api/auth/login         — return JWT on valid credentials
+ * POST   /api/auth/logout        — revoke current session
+ * DELETE /api/auth/sessions      — revoke all sessions for user
  */
 
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { db } from "../db.js";
+import { requireAuth, hashToken, type AuthRequest } from "../middleware/auth.js";
+import { logAudit } from "../lib/audit.js";
 
 export const router = Router();
 
@@ -88,9 +92,47 @@ router.post("/login", async (req, res) => {
             { expiresIn: TOKEN_TTL },
         );
 
+        // Store session for revocation support
+        const tokenHash = hashToken(token);
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        await db.query(
+            `INSERT INTO sessions (user_id, token_hash, user_agent, ip_address, expires_at)
+             VALUES ($1, $2, $3, $4::inet, $5)`,
+            [user.id, tokenHash, req.get("user-agent") || null, req.ip || null, expiresAt.toISOString()],
+        );
+
+        // Audit login
+        logAudit({ userId: user.id, action: "login", ip: req.ip, userAgent: req.get("user-agent") });
+
         res.json({ user: { id: user.id, email: user.email }, token });
     } catch (err) {
         console.error("login error:", err);
         res.status(500).json({ error: "Login failed" });
+    }
+});
+
+// ── Logout (revoke current session) ──────────────────────────────────────────
+router.post("/logout", requireAuth, async (req: AuthRequest, res) => {
+    try {
+        const token = req.headers.authorization!.slice(7);
+        const tokenHash = hashToken(token);
+        await db.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
+        logAudit({ userId: req.user!.id, action: "logout", ip: req.ip, userAgent: req.get("user-agent") });
+        res.json({ ok: true });
+    } catch (err) {
+        console.error("logout error:", err);
+        res.status(500).json({ error: "Logout failed" });
+    }
+});
+
+// ── Revoke all sessions ──────────────────────────────────────────────────────
+router.delete("/sessions", requireAuth, async (req: AuthRequest, res) => {
+    try {
+        await db.query("DELETE FROM sessions WHERE user_id = $1", [req.user!.id]);
+        logAudit({ userId: req.user!.id, action: "revoke_all_sessions", ip: req.ip, userAgent: req.get("user-agent") });
+        res.json({ ok: true, message: "All sessions revoked" });
+    } catch (err) {
+        console.error("revoke sessions error:", err);
+        res.status(500).json({ error: "Failed to revoke sessions" });
     }
 });

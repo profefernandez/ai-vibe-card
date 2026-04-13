@@ -34,6 +34,16 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
         const cleanQuery = sanitised.text;
 
+        // Verify the authenticated user owns this site
+        const { rows: siteRows } = await db.query(
+            "SELECT id FROM sites WHERE id = $1 AND user_id = $2",
+            [site_id, (req as any).user?.id],
+        );
+        if (siteRows.length === 0) {
+            res.status(403).json({ success: false, error: "Site not found or access denied" });
+            return;
+        }
+
         // Fetch content blocks scoped to the requested site (public only)
         const { rows: blocks } = await db.query(
             `SELECT id, heading, body, images, category, tags, block_order, page_id
