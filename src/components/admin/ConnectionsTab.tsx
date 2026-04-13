@@ -3,9 +3,10 @@ import { apiClient as db } from "@/lib/apiClient";
 import type { User, Connection, ConnectionStatus } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import MiniCard from "./MiniCard";
 import {
-    UserPlus, Check, X, Trash2, Link2, Copy, Clock,
-    Globe, QrCode, ChevronDown, ChevronUp,
+    UserPlus, Check, Link2, Copy, Clock,
+    QrCode, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 interface ConnectionsTabProps {
@@ -189,7 +190,7 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
             {pending.length > 0 && (
                 <Section title="Pending Requests" icon={<Clock className="w-5 h-5 text-yellow-500" />} count={pending.length}>
                     {pending.map((c) => (
-                        <ConnectionCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
+                        <MiniCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
                     ))}
                 </Section>
             )}
@@ -200,7 +201,7 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
                     <EmptyState text="No connections yet. Share your card link to get started!" />
                 ) : (
                     approved.map((c) => (
-                        <ConnectionCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
+                        <MiniCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
                     ))
                 )}
             </Section>
@@ -213,7 +214,7 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
                     count={outgoing.filter((c) => c.status === "pending").length}
                 >
                     {outgoing.filter((c) => c.status === "pending").map((c) => (
-                        <ConnectionCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
+                        <MiniCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
                     ))}
                 </Section>
             )}
@@ -222,7 +223,7 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
             {declined.length > 0 && (
                 <CollapsibleSection title="Declined" count={declined.length}>
                     {declined.map((c) => (
-                        <ConnectionCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
+                        <MiniCard key={c.id} connection={c} userId={user.id} onAction={handleAction} />
                     ))}
                 </CollapsibleSection>
             )}
@@ -241,7 +242,7 @@ function Section({ title, icon, count, children }: {
                 {icon} {title}
                 <span className="text-xs text-muted-foreground font-normal">({count})</span>
             </h3>
-            <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
         </div>
     );
 }
@@ -259,76 +260,7 @@ function CollapsibleSection({ title, count, children }: {
                 {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 {title} ({count})
             </button>
-            {open && <div className="grid gap-3 sm:grid-cols-2">{children}</div>}
-        </div>
-    );
-}
-
-function ConnectionCard({ connection: c, userId, onAction }: {
-    connection: Connection; userId: string;
-    onAction: (id: string, action: "approved" | "declined" | "delete") => void;
-}) {
-    const isOwner = c.owner_id === userId;
-    const isPending = c.status === "pending";
-    return (
-        <div className="rounded-xl border border-border/20 bg-card/20 p-4 space-y-3">
-            <div className="flex items-center gap-3">
-                {c.avatar_url ? (
-                    <img src={c.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-primary/20" />
-                ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="text-sm font-bold text-primary">
-                            {c.display_name?.charAt(0)?.toUpperCase() || "?"}
-                        </span>
-                    </div>
-                )}
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-foreground truncate">{c.display_name || "Unknown"}</p>
-                    {c.tagline && (
-                        <p className="text-xs text-muted-foreground truncate">{c.tagline}</p>
-                    )}
-                </div>
-                <span className={`text-xs font-medium ${statusColor[c.status]}`}>
-                    {statusLabel[c.status]}
-                </span>
-            </div>
-
-            {c.message && (
-                <p className="text-xs text-muted-foreground italic line-clamp-2">"{c.message}"</p>
-            )}
-
-            <div className="flex items-center gap-2">
-                {isPending && isOwner && (
-                    <>
-                        <Button size="sm" variant="default" onClick={() => onAction(c.id, "approved")}>
-                            <Check className="w-3 h-3 mr-1" /> Approve
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onAction(c.id, "declined")}>
-                            <X className="w-3 h-3 mr-1" /> Decline
-                        </Button>
-                    </>
-                )}
-                {c.slug && c.status === "approved" && (
-                    <a
-                        href={`/card/${c.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                        <Globe className="w-3 h-3" /> View Card
-                    </a>
-                )}
-                <div className="flex-1" />
-                <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    onClick={() => onAction(c.id, "delete")}
-                    aria-label="Remove connection"
-                >
-                    <Trash2 className="w-3 h-3" />
-                </Button>
-            </div>
+            {open && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{children}</div>}
         </div>
     );
 }

@@ -42,7 +42,7 @@ const ALLOWED_TABLES = new Set([
 // All non-listed columns are stripped on INSERT/UPDATE.
 // "id" is always safe to read but never writable.
 const TABLE_COLUMNS: Record<string, string[]> = {
-    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "slug", "updated_at"],
+    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "slug", "ai_query_enabled", "updated_at"],
     sites: ["user_id", "domain", "name", "verified", "verification_token", "verification_method", "verified_at", "verification_expires_at", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],

@@ -16,6 +16,7 @@ import { db } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { sendEmail, connectionRequestEmail, connectionApprovedEmail } from "../lib/email.js";
 import { logAudit } from "../lib/audit.js";
+import { sanitiseInput, filterOutput } from "../lib/sanitise.js";
 
 export const router = Router();
 
@@ -145,7 +146,9 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         const { rows } = await db.query(
             `SELECT c.id, c.requester_id, c.owner_id, c.status, c.message,
                     c.created_at, c.updated_at, c.approved_at,
-                    p.display_name, p.avatar_url, p.tagline, p.slug
+                    p.display_name, p.avatar_url, p.tagline, p.slug,
+                    p.bio, p.cta_url, p.cta_label, p.social_links,
+                    p.theme, p.accent_color, p.ai_query_enabled
              FROM connections c
              JOIN profiles p ON p.user_id = CASE
                  WHEN c.owner_id = $1 THEN c.requester_id
@@ -240,5 +243,136 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
     } catch (err) {
         console.error("Connection delete error:", err);
         res.status(500).json({ error: "Failed to remove connection" });
+    }
+});
+
+// ── Authenticated: cross-card AI query ───────────────────────────────────────
+// Ask AI about a connected person's public site content.
+// Requires: approved connection + target has ai_query_enabled = true
+
+router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
+    const { id } = req.params;
+    const { question } = req.body as { question?: string };
+    const userId = req.user!.id;
+
+    if (!question || !question.trim()) {
+        res.status(400).json({ error: "question is required" });
+        return;
+    }
+
+    // Sanitize input
+    const sanitised = sanitiseInput(question);
+    if (sanitised.blocked) {
+        res.status(400).json({ error: sanitised.reason });
+        return;
+    }
+    const cleanQuestion = sanitised.text;
+
+    try {
+        // Verify the connection exists, is approved, and user is a party
+        const { rows: connRows } = await db.query(
+            `SELECT c.requester_id, c.owner_id
+             FROM connections c
+             WHERE c.id = $1 AND c.status = 'approved'
+               AND (c.owner_id = $2 OR c.requester_id = $2)`,
+            [id, userId],
+        );
+
+        if (connRows.length === 0) {
+            res.status(404).json({ error: "Connection not found or not approved" });
+            return;
+        }
+
+        // Determine the "other" user (the one being queried)
+        const conn = connRows[0];
+        const targetUserId = conn.owner_id === userId ? conn.requester_id : conn.owner_id;
+
+        // Check that the target has ai_query_enabled
+        const { rows: targetProfile } = await db.query(
+            `SELECT display_name, ai_query_enabled FROM profiles WHERE user_id = $1`,
+            [targetUserId],
+        );
+        if (!targetProfile.length || !targetProfile[0].ai_query_enabled) {
+            res.status(403).json({ error: "This user has not enabled AI queries on their card" });
+            return;
+        }
+
+        // Fetch the target user's public content blocks (from their verified sites)
+        const { rows: blocks } = await db.query(
+            `SELECT cb.heading, cb.body
+             FROM content_blocks cb
+             JOIN sites s ON s.id = cb.site_id
+             WHERE s.user_id = $1 AND cb.visibility = 'public'
+             ORDER BY cb.block_order
+             LIMIT 30`,
+            [targetUserId],
+        );
+
+        if (blocks.length === 0) {
+            res.json({ answer: `${targetProfile[0].display_name} hasn't added any site content yet.` });
+            return;
+        }
+
+        const AI_API_URL = process.env.AI_API_URL;
+        const AI_API_KEY = process.env.AI_API_KEY;
+        const AI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
+
+        if (!AI_API_URL || !AI_API_KEY) {
+            res.status(500).json({ error: "AI gateway not configured" });
+            return;
+        }
+
+        // Build context from content blocks
+        const siteContext = blocks
+            .map((b: any) => `${b.heading || ""}: ${(b.body || "").slice(0, 300)}`)
+            .join("\n");
+
+        const targetName = targetProfile[0].display_name || "this person";
+
+        const aiResponse = await fetch(`${AI_API_URL}/chat/completions`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${AI_API_KEY}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: AI_MODEL,
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are a helpful assistant answering questions about ${targetName}'s business and services based on their website content. Answer concisely and accurately. If the content doesn't contain enough information to answer, say so honestly. Do not make up information.`,
+                    },
+                    {
+                        role: "user",
+                        content: `[Website content for ${targetName}]\n${siteContext}\n\n[Question]\n${cleanQuestion}`,
+                    },
+                ],
+                max_tokens: 500,
+            }),
+        });
+
+        if (!aiResponse.ok) {
+            console.error("Cross-card AI query failed:", aiResponse.status);
+            res.status(502).json({ error: "AI service unavailable" });
+            return;
+        }
+
+        const aiData = await aiResponse.json() as any;
+        const answer = filterOutput(aiData.choices?.[0]?.message?.content || "No response from AI.");
+
+        await logAudit({
+            userId,
+            action: "cross_card_query",
+            tableName: "connections",
+            recordId: id,
+            ip: req.ip,
+            userAgent: req.headers["user-agent"],
+            meta: { target_user_id: targetUserId, tokens: aiData.usage?.total_tokens },
+        });
+
+        res.json({ answer });
+    } catch (err) {
+        console.error("Cross-card query error:", err);
+        res.status(500).json({ error: "Failed to query card" });
     }
 });

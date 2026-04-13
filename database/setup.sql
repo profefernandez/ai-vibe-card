@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     twitter_handle TEXT       NOT NULL DEFAULT '',
     robots_txt    JSONB       NOT NULL DEFAULT '[{"userAgent":"*","rules":[{"action":"allow","path":"/"}]}]',
     slug          TEXT        NOT NULL DEFAULT '',
+    ai_query_enabled BOOLEAN  NOT NULL DEFAULT false,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_profiles_user UNIQUE (user_id),

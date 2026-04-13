@@ -35,6 +35,7 @@ export interface Profile {
     social_links: SocialLink[];
     card_layout: CardLayout;
     slug: string;
+    ai_query_enabled: boolean;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
@@ -102,6 +103,13 @@ export interface Connection {
     avatar_url?: string;
     tagline?: string;
     slug?: string;
+    bio?: string;
+    cta_url?: string;
+    cta_label?: string;
+    social_links?: SocialLink[];
+    theme?: string;
+    accent_color?: string;
+    ai_query_enabled?: boolean;
 }
 
 // ─── AI Preferences ──────────────────────────────────────────────────────────

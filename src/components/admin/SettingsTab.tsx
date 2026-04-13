@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor } from "lucide-react";
+import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { applyTheme } from "@/lib/theme";
 import { ACCENT_COLORS } from "@/lib/constants";
@@ -104,6 +104,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
     aiBots: true,
   });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [aiQueryEnabled, setAiQueryEnabled] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -112,7 +113,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   const fetchData = async () => {
     const [sitesRes, profileRes] = await Promise.all([
       db.from("sites").select("id, domain, share_usage_limit").eq("user_id", user.id).order("created_at", { ascending: false }),
-      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt").eq("user_id", user.id).maybeSingle(),
+      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt, ai_query_enabled").eq("user_id", user.id).maybeSingle(),
     ]);
     setSites((sitesRes.data as SiteSettings[]) || []);
     if (profileRes.data) {
@@ -126,6 +127,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
       if (Array.isArray(p.robots_txt) && p.robots_txt.length > 0) {
         setCrawlerToggles(directivesToToggles(p.robots_txt));
       }
+      setAiQueryEnabled(!!p.ai_query_enabled);
     }
     setLoading(false);
   };
@@ -150,6 +152,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         og_image_url: ogImageUrl,
         twitter_handle: twitterHandle,
         robots_txt: togglesToDirectives(crawlerToggles) as any,
+        ai_query_enabled: aiQueryEnabled,
       })
       .eq("user_id", user.id);
 
@@ -355,6 +358,34 @@ export default function SettingsTab({ user }: SettingsTabProps) {
               {robotsTxtPreview}
             </pre>
           </details>
+        </CardContent>
+      </Card>
+
+      {/* ── Cross-Card AI Queries ── */}
+      <Card className="bg-card/50 border-border/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base font-sans">
+            <Zap className="w-4 h-4 text-primary" aria-hidden="true" /> Cross-Card AI Queries
+          </CardTitle>
+          <CardDescription>Allow your approved connections to ask AI questions about your card content.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
+            <div className="space-y-1">
+              <Label htmlFor="toggle-ai-query" className="text-sm font-medium text-foreground">
+                Allow connected users to query my card via AI
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                When enabled, people you're connected with can ask AI-powered questions about your public site content.
+                Your data is never shared directly — only AI-generated answers are returned.
+              </p>
+            </div>
+            <Switch
+              id="toggle-ai-query"
+              checked={aiQueryEnabled}
+              onCheckedChange={setAiQueryEnabled}
+            />
+          </div>
         </CardContent>
       </Card>
 

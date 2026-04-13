@@ -151,6 +151,24 @@ app.use("/api/card/:slug/connect", rateLimit({
     message: { error: "Too many connection requests, please try again later" },
 }));
 
+// Rate limit cross-card AI queries
+app.use("/api/connections/:id/query", rateLimit({
+    windowMs: 60 * 1000,
+    max: 15,
+    message: { error: "Too many AI queries, please slow down" },
+    keyGenerator: (req) => {
+        try {
+            const header = req.headers.authorization;
+            if (header?.startsWith("Bearer ")) {
+                const jwt = require("jsonwebtoken");
+                const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET) as any;
+                if (payload?.sub) return `user:${payload.sub}`;
+            }
+        } catch { /* fall through to IP */ }
+        return req.ip || "unknown";
+    },
+}));
+
 // Health check
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
