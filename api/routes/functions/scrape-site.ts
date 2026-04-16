@@ -12,6 +12,7 @@ import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
+import { logger } from "../../logger.js";
 
 type Block = {
     heading: string | null;
@@ -204,7 +205,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
 
         res.json({ success: true, pages: results.length, blocks: totalBlocks });
     } catch (err) {
-        console.error("scrape-site error:", err);
+        logger.error({ err }, "scrape-site error");
         await db
             .query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id])
             .catch(() => { });

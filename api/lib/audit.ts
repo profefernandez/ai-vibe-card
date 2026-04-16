@@ -5,6 +5,7 @@
  */
 
 import { db } from "../db.js";
+import { logger } from "../logger.js";
 
 export interface AuditEntry {
     userId?: string | null;
@@ -30,5 +31,5 @@ export function logAudit(entry: AuditEntry): void {
             ip ?? null,
             userAgent ?? null,
         ],
-    ).catch((err) => console.error("audit_log write failed:", err));
+    ).catch((err) => logger.error({ err }, "audit_log write failed"));
 }

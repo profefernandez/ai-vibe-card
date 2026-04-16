@@ -24,6 +24,7 @@ import { db } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { encrypt } from "../lib/crypto.js";
 import { randomUUID } from "node:crypto";
+import { logger } from "../logger.js";
 
 export const router = Router();
 
@@ -48,7 +49,7 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
-    connections: ["requester_id", "owner_id", "status", "message", "approved_at"],
+    connections: ["status", "message", "approved_at"],
 };
 
 
@@ -98,8 +99,36 @@ function pickColumns(table: string, data: Record<string, unknown>): Record<strin
 function ownerColumn(table: string): string | null {
     if (["profiles", "sites", "ai_preferences", "api_connections"].includes(table)) return "user_id";
     if (table === "connections") return "owner_id";
-    // site_pages and content_blocks use site_id — ownership verified via site table
     return null;
+}
+
+/**
+ * Tables scoped to an organization. On INSERT/UPSERT the organization_id is
+ * taken from the authenticated session (never trusted from the client).
+ */
+const ORG_SCOPED_TABLES = new Set(["profiles", "sites", "ai_preferences", "api_connections"]);
+
+/** Tables where ownership is enforced via site_id → sites.user_id */
+const SITE_OWNED_TABLES = new Set(["site_pages", "content_blocks"]);
+
+/** Add site ownership WHERE clause for site_pages/content_blocks */
+function addSiteOwnership(table: string, userId: string, clauses: string[], values: unknown[]): void {
+    if (SITE_OWNED_TABLES.has(table)) {
+        values.push(userId);
+        clauses.push(`"site_id" IN (SELECT id FROM sites WHERE user_id = $${values.length})`);
+    }
+}
+
+/** Verify all site_ids in rows belong to the authenticated user */
+async function verifySiteOwnership(table: string, rows: Record<string, unknown>[], userId: string): Promise<boolean> {
+    if (!SITE_OWNED_TABLES.has(table)) return true;
+    const siteIds = [...new Set(rows.map((r) => r.site_id).filter(Boolean))];
+    if (siteIds.length === 0) return false;
+    const { rows: owned } = await db.query(
+        `SELECT id FROM sites WHERE id = ANY($1) AND user_id = $2`,
+        [siteIds, userId],
+    );
+    return owned.length === siteIds.length;
 }
 
 // ── SELECT ─────────────────────────────────────────────────────────────────────
@@ -117,6 +146,7 @@ router.get("/:table", requireAuth, async (req: AuthRequest, res) => {
         values.push(req.user!.id);
         clauses.push(`"${ownCol}" = $${values.length}`);
     }
+    addSiteOwnership(table, req.user!.id, clauses, values);
 
     // Validate select columns against allowlist
     let cols = "*";
@@ -158,7 +188,7 @@ router.get("/:table", requireAuth, async (req: AuthRequest, res) => {
         }
         res.json(result.rows);
     } catch (err) {
-        console.error("SELECT error:", err);
+        logger.error({ err }, "SELECT error");
         res.status(500).json({ error: "Query failed" });
     }
 });
@@ -173,9 +203,20 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
 
     // Force ownership column to authenticated user
     const ownCol = ownerColumn(table);
+
+    // Verify site ownership for site_pages/content_blocks
+    if (SITE_OWNED_TABLES.has(table)) {
+        const valid = await verifySiteOwnership(table, rows, req.user!.id);
+        if (!valid) {
+            res.status(403).json({ error: "Access denied: site_id does not belong to you" });
+            return;
+        }
+    }
+
     const cleaned = rows.map((r) => {
         const c = pickColumns(table, r);
         if (ownCol) c[ownCol] = req.user!.id;
+        if (ORG_SCOPED_TABLES.has(table)) c.organization_id = req.user!.organizationId;
         // Encrypt API keys before storage
         if (table === "api_connections" && typeof c.api_key_encrypted === "string" && c.api_key_encrypted) {
             c.api_key_encrypted = encrypt(c.api_key_encrypted);
@@ -206,7 +247,7 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
         const result = await db.query(sql, flatValues);
         res.status(201).json(result.rows.length === 1 ? result.rows[0] : result.rows);
     } catch (err) {
-        console.error("INSERT error:", err);
+        logger.error({ err }, "INSERT error");
         res.status(500).json({ error: "Insert failed" });
     }
 });
@@ -229,6 +270,7 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
         values.push(req.user!.id);
         clauses.push(`"${ownCol}" = $${values.length}`);
     }
+    addSiteOwnership(table, req.user!.id, clauses, values);
 
     const cleaned = pickColumns(table, req.body as Record<string, unknown>);
     if (Object.keys(cleaned).length === 0) {
@@ -240,7 +282,7 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
         cleaned.api_key_encrypted = encrypt(cleaned.api_key_encrypted);
     }
 
-    const setClauses = Object.keys(cleaned).map((col, i) => {
+    const setClauses = Object.keys(cleaned).map((col) => {
         values.push(cleaned[col]);
         return `"${col}" = $${values.length}`;
     });
@@ -250,7 +292,7 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
         await db.query(sql, values);
         res.json({ ok: true });
     } catch (err) {
-        console.error("UPDATE error:", err);
+        logger.error({ err }, "UPDATE error");
         res.status(500).json({ error: "Update failed" });
     }
 });
@@ -273,13 +315,14 @@ router.delete("/:table", requireAuth, async (req: AuthRequest, res) => {
         values.push(req.user!.id);
         clauses.push(`"${ownCol}" = $${values.length}`);
     }
+    addSiteOwnership(table, req.user!.id, clauses, values);
 
     const sql = `DELETE FROM "${table}" WHERE ${clauses.join(" AND ")}`;
     try {
         await db.query(sql, values);
         res.json({ ok: true });
     } catch (err) {
-        console.error("DELETE error:", err);
+        logger.error({ err }, "DELETE error");
         res.status(500).json({ error: "Delete failed" });
     }
 });
@@ -303,6 +346,7 @@ router.post("/:table/upsert", requireAuth, async (req: AuthRequest, res) => {
     // Force ownership column to authenticated user
     const ownCol = ownerColumn(table);
     if (ownCol) cleaned[ownCol] = req.user!.id;
+    if (ORG_SCOPED_TABLES.has(table)) cleaned.organization_id = req.user!.organizationId;
 
     const colNames = Object.keys(cleaned);
     if (colNames.length === 0) {
@@ -335,7 +379,7 @@ router.post("/:table/upsert", requireAuth, async (req: AuthRequest, res) => {
         const result = await db.query(sql, flatValues);
         res.json(result.rows[0] ?? null);
     } catch (err) {
-        console.error("UPSERT error:", err);
+        logger.error({ err }, "UPSERT error");
         res.status(500).json({ error: "Upsert failed" });
     }
 });

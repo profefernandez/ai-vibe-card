@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
     Globe, ExternalLink, Zap, Loader2, Send,
-    Check, X, Trash2, MessageSquare,
+    Check, X, Trash2,
 } from "lucide-react";
 
 interface MiniCardProps {

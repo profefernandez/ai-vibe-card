@@ -6,6 +6,7 @@
  */
 
 import nodemailer from "nodemailer";
+import { logger } from "../logger.js";
 
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
@@ -33,7 +34,7 @@ interface EmailOpts {
 
 export async function sendEmail(opts: EmailOpts): Promise<boolean> {
     if (!transporter) {
-        console.log(`[email] SMTP not configured — skipping email to ${opts.to}: ${opts.subject}`);
+        logger.info({ to: opts.to, subject: opts.subject }, "email: SMTP not configured — skipping");
         return false;
     }
     try {
@@ -46,7 +47,7 @@ export async function sendEmail(opts: EmailOpts): Promise<boolean> {
         });
         return true;
     } catch (err) {
-        console.error("[email] Failed to send:", err);
+        logger.error({ err }, "email: failed to send");
         return false;
     }
 }

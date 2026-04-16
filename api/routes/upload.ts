@@ -12,6 +12,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { db } from "../db.js";
+import { logger } from "../logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,7 +98,7 @@ router.post(
 
             res.json({ url: avatarUrl });
         } catch (err) {
-            console.error("Avatar upload error:", err);
+            logger.error({ err }, "avatar upload error");
             res.status(500).json({ error: "Failed to save avatar" });
         }
     }
@@ -127,7 +128,7 @@ router.delete("/avatar", requireAuth, async (req: AuthRequest, res) => {
 
         res.json({ ok: true });
     } catch (err) {
-        console.error("Avatar delete error:", err);
+        logger.error({ err }, "avatar delete error");
         res.status(500).json({ error: "Failed to delete avatar" });
     }
 });

@@ -17,6 +17,7 @@ import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { sendEmail, connectionRequestEmail, connectionApprovedEmail } from "../lib/email.js";
 import { logAudit } from "../lib/audit.js";
 import { sanitiseInput, filterOutput } from "../lib/sanitise.js";
+import { logger } from "../logger.js";
 
 export const router = Router();
 
@@ -32,8 +33,8 @@ router.get("/:slug", async (req, res) => {
     try {
         const { rows } = await db.query(
             `SELECT p.display_name, p.tagline, p.bio, p.avatar_url,
-                    p.cta_url, p.cta_label, p.social_links, p.card_layout,
-                    p.theme, p.accent_color, p.slug
+                    p.cta_url, p.cta_label, p.cta_embed, p.social_links, p.card_layout,
+                    p.theme, p.accent_color, p.slug, p.ai_query_enabled
              FROM profiles p
              WHERE LOWER(p.slug) = LOWER($1)`,
             [slug],
@@ -46,7 +47,7 @@ router.get("/:slug", async (req, res) => {
 
         res.json(rows[0]);
     } catch (err) {
-        console.error("Card view error:", err);
+        logger.error({ err }, "card view error");
         res.status(500).json({ error: "Failed to load card" });
     }
 });
@@ -132,7 +133,7 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
 
         res.status(201).json(newConn[0]);
     } catch (err) {
-        console.error("Connection request error:", err);
+        logger.error({ err }, "connection request error");
         res.status(500).json({ error: "Failed to send connection request" });
     }
 });
@@ -160,7 +161,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
         );
         res.json(rows);
     } catch (err) {
-        console.error("List connections error:", err);
+        logger.error({ err }, "list connections error");
         res.status(500).json({ error: "Failed to list connections" });
     }
 });
@@ -214,7 +215,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res) => {
 
         res.json(rows[0]);
     } catch (err) {
-        console.error("Connection update error:", err);
+        logger.error({ err }, "connection update error");
         res.status(500).json({ error: "Failed to update connection" });
     }
 });
@@ -241,7 +242,7 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 
         res.json({ ok: true });
     } catch (err) {
-        console.error("Connection delete error:", err);
+        logger.error({ err }, "connection delete error");
         res.status(500).json({ error: "Failed to remove connection" });
     }
 });
@@ -313,12 +314,11 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
             return;
         }
 
-        const AI_API_URL = process.env.AI_API_URL;
-        const AI_API_KEY = process.env.AI_API_KEY;
-        const AI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
+        const LEMONADE_API_KEY = process.env.LEMONADE_API_KEY;
+        const LEMONADE_CONTENT_ID = process.env.LEMONADE_CONTENT_ID;
 
-        if (!AI_API_URL || !AI_API_KEY) {
-            res.status(500).json({ error: "AI gateway not configured" });
+        if (!LEMONADE_API_KEY || !LEMONADE_CONTENT_ID) {
+            res.status(500).json({ error: "LaunchLemonade not configured" });
             return;
         }
 
@@ -329,36 +329,28 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
 
         const targetName = targetProfile[0].display_name || "this person";
 
-        const aiResponse = await fetch(`${AI_API_URL}/chat/completions`, {
+        const message = `You are a helpful assistant answering questions about ${targetName}'s business and services based on their website content. Answer concisely and accurately. If the content doesn't contain enough information to answer, say so honestly. Do not make up information.\n\n[Website content for ${targetName}]\n${siteContext}\n\n[Question]\n${cleanQuestion}`;
+
+        const aiResponse = await fetch("https://api.launchlemonade.app/v1/chat", {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${AI_API_KEY}`,
+                Authorization: `Bearer ${LEMONADE_API_KEY}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                model: AI_MODEL,
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are a helpful assistant answering questions about ${targetName}'s business and services based on their website content. Answer concisely and accurately. If the content doesn't contain enough information to answer, say so honestly. Do not make up information.`,
-                    },
-                    {
-                        role: "user",
-                        content: `[Website content for ${targetName}]\n${siteContext}\n\n[Question]\n${cleanQuestion}`,
-                    },
-                ],
-                max_tokens: 500,
+                lemonade_id: LEMONADE_CONTENT_ID,
+                message,
             }),
         });
 
         if (!aiResponse.ok) {
-            console.error("Cross-card AI query failed:", aiResponse.status);
+            logger.error({ status: aiResponse.status }, "cross-card AI query failed");
             res.status(502).json({ error: "AI service unavailable" });
             return;
         }
 
         const aiData = await aiResponse.json() as any;
-        const answer = filterOutput(aiData.choices?.[0]?.message?.content || "No response from AI.");
+        const answer = filterOutput(aiData.response || "No response from AI.");
 
         await logAudit({
             userId,
@@ -372,7 +364,7 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
 
         res.json({ answer });
     } catch (err) {
-        console.error("Cross-card query error:", err);
+        logger.error({ err }, "cross-card query error");
         res.status(500).json({ error: "Failed to query card" });
     }
 });

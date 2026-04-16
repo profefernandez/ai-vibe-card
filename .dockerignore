@@ -1,0 +1,48 @@
+# Keep build context small + secret-free.
+
+# Source control
+.git
+.gitignore
+.github
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Local env / secrets — NEVER ship these into an image
+.env
+.env.*
+!.env.example
+api/.env
+api/.env.*
+!api/.env.example
+
+# Build artifacts (re-built inside the image)
+dist
+api/dist
+node_modules
+api/node_modules
+
+# Logs / runtime data
+*.log
+api/uploads/*
+!api/uploads/.gitkeep
+
+# Tests / docs that don't belong in a runtime image
+*.test.ts
+*.test.tsx
+*.spec.ts
+coverage
+README.md
+CHANGELOG.md
+CODEBASE.md
+LICENSE
+
+# Claude / tooling
+.claude
+.claude-cache
+
+# Database bootstrap (runs on host, not in image)
+database

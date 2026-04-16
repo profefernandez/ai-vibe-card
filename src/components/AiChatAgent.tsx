@@ -36,6 +36,7 @@ const AiChatAgent = ({ siteId, initialMessage, onMessageConsumed }: AiChatAgentP
   }, [initialMessage]);
 
   const handleSend = async (text?: string) => {
+    if (isTyping) return;
     const message = text || input.trim();
     if (!message) return;
 

@@ -3,6 +3,13 @@
 -- Target: Scala Hosting VPS  |  SPanel  |  Rocky Linux
 -- Requires: PostgreSQL 14+
 --
+-- ⚠️  SCHEMA IS NOW MANAGED BY MIGRATIONS (api/migrations/).
+--     This file remains the BOOTSTRAP (database, user, extensions, grants).
+--     After running this file, run migrations from the api/ directory:
+--         cd api && npm run migrate:up
+--     The first migration (0001_initial) is idempotent — safe even if the
+--     schema in STEP 3 below was already applied before migrations existed.
+--
 -- Run as the "postgres" superuser via SSH:
 --   psql -U postgres -f database/setup.sql
 --

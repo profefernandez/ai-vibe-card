@@ -13,6 +13,7 @@
 import type { Request, Response } from "express";
 import { db } from "../../db.js";
 import { handler as scrapeSiteHandler } from "./scrape-site.js";
+import { logger } from "../../logger.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
 import { promises as dns } from "node:dns";
 import { timingSafeEqual } from "node:crypto";
@@ -173,7 +174,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
                 results.push({ id: site.id, domain: site.domain, status: "refreshed" });
             } catch (err) {
-                console.error(`refresh-sites: failed for ${site.domain}:`, err);
+                logger.error({ err, domain: site.domain }, "refresh-sites: scrape failed");
                 await db
                     .query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site.id])
                     .catch(() => { });
@@ -187,7 +188,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
         res.json({ refreshed: results.filter((r) => r.status === "refreshed").length, sites: results });
     } catch (err) {
-        console.error("refresh-sites error:", err);
+        logger.error({ err }, "refresh-sites error");
         res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });
     }
 }

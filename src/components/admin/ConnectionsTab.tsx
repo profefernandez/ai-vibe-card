@@ -67,7 +67,7 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
             return;
         }
         try {
-            await db.from("profiles").upsert({ user_id: user.id, slug: clean }, "user_id");
+            await db.from("profiles").upsert({ user_id: user.id, slug: clean }, { onConflict: "user_id" });
             setSlug(clean);
             setEditingSlug(false);
             toast({ title: "Share slug updated" });

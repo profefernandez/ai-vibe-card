@@ -34,13 +34,20 @@ export interface Profile {
     cta_embed: string;
     social_links: SocialLink[];
     card_layout: CardLayout;
+    theme: string;
+    accent_color: string;
+    seo_title: string;
+    seo_description: string;
+    og_image_url: string;
+    twitter_handle: string;
+    robots_txt: unknown;
     slug: string;
     ai_query_enabled: boolean;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
 
-export type ScrapeStatus = "pending" | "scraping" | "done" | "error";
+export type ScrapeStatus = "pending" | "scraping" | "completed" | "error";
 
 export type VerificationMethod = "dns_txt" | "meta_tag";
 
@@ -53,7 +60,7 @@ export interface Site {
     verification_method: VerificationMethod | null;
     verified_at: string | null;
     verification_expires_at: string | null;
-    scrape_status: string;
+    scrape_status: ScrapeStatus;
     page_count: number;
     share_usage_limit: number;
     last_scraped_at: string | null;
@@ -65,11 +72,13 @@ export interface Site {
 export interface ContentBlock {
     id: string;
     site_id: string;
+    page_id: string;
     heading: string | null;
     body: string | null;
     images: string[];
     category: string | null;
     tags: string[] | null;
+    visibility: string;
     block_order: number;
 }
 
@@ -119,7 +128,7 @@ export interface AiPreferences {
     rules: string[];
     personality: string;
     response_style: string;
-    injection_rules: string[];
+    prompt_injection_rules: string[];
     safety_protocol: string;
 }
 

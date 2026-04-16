@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(npm:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(cd:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(kill:*)",
+      "Bash(lsof:*)",
+      "Bash(curl:*)",
+      "Bash(mkdir:*)",
+      "Read"
+    ]
+  }
+}

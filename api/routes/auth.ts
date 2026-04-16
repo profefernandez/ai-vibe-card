@@ -12,6 +12,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../db.js";
 import { requireAuth, hashToken, type AuthRequest } from "../middleware/auth.js";
 import { logAudit } from "../lib/audit.js";
+import { logger } from "../logger.js";
 
 export const router = Router();
 
@@ -33,30 +34,56 @@ router.post("/register", async (req, res) => {
         return;
     }
 
+    const client = await db.connect();
     try {
-        const existing = await db.query("SELECT id FROM users WHERE email = $1", [email]);
+        const existing = await client.query("SELECT id FROM users WHERE email = $1", [email]);
         if (existing.rows.length > 0) {
-            res.status(409).json({ error: "An account with that email already exists" });
+            // Return same response as success to prevent user enumeration
+            client.release();
+            res.status(200).json({ message: "Registration processed. Please check your email or sign in." });
             return;
         }
 
         const hash = await bcrypt.hash(password, SALT_ROUNDS);
-        const result = await db.query(
+
+        await client.query("BEGIN");
+
+        const userRes = await client.query(
             "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
             [email, hash],
         );
-        const user = result.rows[0] as { id: string; email: string };
+        const user = userRes.rows[0] as { id: string; email: string };
 
-        // Auto-create empty profile for new user
-        await db.query(
-            "INSERT INTO profiles (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
-            [user.id],
+        // Create personal organization. Slug = sanitized email local-part + random suffix
+        // so concurrent signups with similar emails don't collide.
+        const localPart = email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-") || "user";
+        const slug = `${localPart}-${Math.random().toString(36).slice(2, 8)}`;
+
+        const orgRes = await client.query(
+            "INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id",
+            ["Personal", slug],
+        );
+        const org = orgRes.rows[0] as { id: string };
+
+        await client.query(
+            "INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, 'owner')",
+            [user.id, org.id],
         );
 
-        res.status(201).json({ message: "Account created. Please sign in." });
+        await client.query(
+            "INSERT INTO profiles (user_id, organization_id) VALUES ($1, $2)",
+            [user.id, org.id],
+        );
+
+        await client.query("COMMIT");
+
+        res.status(200).json({ message: "Registration processed. Please check your email or sign in." });
     } catch (err) {
-        console.error("register error:", err);
+        await client.query("ROLLBACK").catch(() => { /* nothing */ });
+        logger.error({ err }, "register error");
         res.status(500).json({ error: "Registration failed" });
+    } finally {
+        client.release();
     }
 });
 
@@ -70,11 +97,16 @@ router.post("/login", async (req, res) => {
 
     try {
         const result = await db.query(
-            "SELECT id, email, password_hash FROM users WHERE email = $1",
+            `SELECT u.id, u.email, u.password_hash, m.organization_id
+             FROM users u
+             LEFT JOIN memberships m ON m.user_id = u.id
+             WHERE u.email = $1
+             ORDER BY m.created_at ASC
+             LIMIT 1`,
             [email],
         );
         const user = result.rows[0] as
-            | { id: string; email: string; password_hash: string }
+            | { id: string; email: string; password_hash: string; organization_id: string | null }
             | undefined;
 
         // Always run bcrypt.compare to prevent timing-based user enumeration
@@ -86,8 +118,15 @@ router.post("/login", async (req, res) => {
             return;
         }
 
+        if (!user.organization_id) {
+            // Shouldn't happen — every user gets an org at signup. Guard anyway.
+            logger.error({ userId: user.id }, "user has no organization membership");
+            res.status(500).json({ error: "Account is not fully set up. Contact support." });
+            return;
+        }
+
         const token = jwt.sign(
-            { sub: user.id, email: user.email },
+            { sub: user.id, email: user.email, org: user.organization_id },
             process.env.JWT_SECRET as string,
             { expiresIn: TOKEN_TTL },
         );
@@ -106,7 +145,7 @@ router.post("/login", async (req, res) => {
 
         res.json({ user: { id: user.id, email: user.email }, token });
     } catch (err) {
-        console.error("login error:", err);
+        logger.error({ err }, "login error");
         res.status(500).json({ error: "Login failed" });
     }
 });
@@ -120,7 +159,7 @@ router.post("/logout", requireAuth, async (req: AuthRequest, res) => {
         logAudit({ userId: req.user!.id, action: "logout", ip: req.ip, userAgent: req.get("user-agent") });
         res.json({ ok: true });
     } catch (err) {
-        console.error("logout error:", err);
+        logger.error({ err }, "logout error");
         res.status(500).json({ error: "Logout failed" });
     }
 });
@@ -132,7 +171,7 @@ router.delete("/sessions", requireAuth, async (req: AuthRequest, res) => {
         logAudit({ userId: req.user!.id, action: "revoke_all_sessions", ip: req.ip, userAgent: req.get("user-agent") });
         res.json({ ok: true, message: "All sessions revoked" });
     } catch (err) {
-        console.error("revoke sessions error:", err);
+        logger.error({ err }, "revoke sessions error");
         res.status(500).json({ error: "Failed to revoke sessions" });
     }
 });

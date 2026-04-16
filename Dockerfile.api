@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1.7
+
+# ─── Stage 1: build ──────────────────────────────────────────────────────────
+FROM node:20-alpine AS build
+WORKDIR /build
+
+# Install dependencies first for better layer caching
+COPY api/package.json api/package-lock.json ./
+RUN npm ci
+
+# Copy source and compile TypeScript
+COPY api/tsconfig.json ./
+COPY api/index.ts api/db.ts api/logger.ts ./
+COPY api/lib ./lib
+COPY api/middleware ./middleware
+COPY api/routes ./routes
+COPY api/migrations ./migrations
+RUN npm run build
+
+# ─── Stage 2: production deps only ───────────────────────────────────────────
+FROM node:20-alpine AS deps
+WORKDIR /deps
+COPY api/package.json api/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# ─── Stage 3: runtime ────────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+# Run as non-root. The "node" user/group is built into the official image.
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3001
+
+COPY --from=deps  --chown=node:node /deps/node_modules ./node_modules
+COPY --from=build --chown=node:node /build/dist        ./dist
+COPY --from=build --chown=node:node /build/migrations  ./migrations
+COPY --from=build --chown=node:node /build/package.json ./package.json
+
+# Uploads directory must exist and be owned by the runtime user. The host
+# bind/volume mounted at this path inherits these contents on first run.
+RUN mkdir -p /app/dist/uploads && chown -R node:node /app
+
+USER node
+
+EXPOSE 3001
+
+# Healthcheck hits the readiness endpoint (which checks the DB).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:3001/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "dist/index.js"]

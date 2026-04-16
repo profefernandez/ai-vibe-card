@@ -13,6 +13,7 @@ import type { AuthRequest } from "../../middleware/auth.js";
 import { db } from "../../db.js";
 import { decrypt, isEncrypted } from "../../lib/crypto.js";
 import { logAudit } from "../../lib/audit.js";
+import { logger } from "../../logger.js";
 
 export async function handler(req: AuthRequest, res: Response): Promise<void> {
     const { provider } = req.body as { provider?: string };
@@ -123,7 +124,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
 
         res.json({ success, error: errorDetail });
     } catch (err) {
-        console.error("test-api-connection error:", err);
+        logger.error({ err }, "test-api-connection error");
         res.status(500).json({
             success: false,
             error: "Connection test failed. Please verify your API key and try again.",

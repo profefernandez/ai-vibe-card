@@ -269,6 +269,13 @@ const auth = {
     },
 
     async signOut(): Promise<void> {
+        const session = loadSession();
+        if (session?.token) {
+            fetch(`${API_BASE}/auth/logout`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.token}` },
+            }).catch(() => {});
+        }
         saveSession(null);
         notifyListeners("SIGNED_OUT", null);
     },

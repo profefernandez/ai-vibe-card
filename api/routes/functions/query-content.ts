@@ -3,16 +3,16 @@
  * POST /api/functions/query-content
  * Body: { query: string, site_id?: string }
  *
- * Uses the AI gateway configured via environment variables:
- *   AI_API_URL   — base URL of the AI-compatible chat completions API
- *   AI_API_KEY   — bearer key for the AI gateway
- *   AI_MODEL     — model identifier (default: gpt-4o-mini)
+ * Uses LaunchLemonade as the AI provider:
+ *   LEMONADE_API_KEY    — your LaunchLemonade API key
+ *   LEMONADE_CONTENT_ID — content agent ID
  */
 
 import type { Request, Response } from "express";
 import { db } from "../../db.js";
 import { sanitiseInput } from "../../lib/sanitise.js";
 import { logAudit } from "../../lib/audit.js";
+import { logger } from "../../logger.js";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {
@@ -58,12 +58,11 @@ export async function handler(req: Request, res: Response): Promise<void> {
             return;
         }
 
-        const AI_API_URL = process.env.AI_API_URL;
-        const AI_API_KEY = process.env.AI_API_KEY;
-        const AI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
+        const LEMONADE_API_KEY = process.env.LEMONADE_API_KEY;
+        const LEMONADE_CONTENT_ID = process.env.LEMONADE_CONTENT_ID;
 
-        if (!AI_API_URL || !AI_API_KEY) {
-            res.status(500).json({ success: false, error: "AI gateway not configured" });
+        if (!LEMONADE_API_KEY || !LEMONADE_CONTENT_ID) {
+            res.status(500).json({ success: false, error: "LaunchLemonade not configured" });
             return;
         }
 
@@ -72,25 +71,19 @@ export async function handler(req: Request, res: Response): Promise<void> {
             .map((b: any, i: number) => `[${i}] ${b.heading || "No heading"}: ${String(b.body || "").slice(0, 200)}`)
             .join("\n");
 
-        const aiResponse = await fetch(`${AI_API_URL}/chat/completions`, {
+        const message =
+            `You are a content routing AI. Given a user query and a list of content blocks, return the indices of the 3-5 most relevant blocks. Return ONLY a JSON array of indices, e.g. [0, 3, 7]. If nothing is relevant, return [].\n\n` +
+            `Query: "${cleanQuery}"\n\nContent blocks:\n${blockSummaries}`;
+
+        const aiResponse = await fetch("https://api.launchlemonade.app/v1/chat", {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${AI_API_KEY}`,
+                Authorization: `Bearer ${LEMONADE_API_KEY}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                model: AI_MODEL,
-                messages: [
-                    {
-                        role: "system",
-                        content:
-                            "You are a content routing AI. Given a user query and a list of content blocks, return the indices of the 3-5 most relevant blocks. Return ONLY a JSON array of indices, e.g. [0, 3, 7]. If nothing is relevant, return [].",
-                    },
-                    {
-                        role: "user",
-                        content: `Query: "${cleanQuery}"\n\nContent blocks:\n${blockSummaries}`,
-                    },
-                ],
+                lemonade_id: LEMONADE_CONTENT_ID,
+                message,
             }),
         });
 
@@ -105,7 +98,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
 
         const aiData = (await aiResponse.json()) as any;
-        const content: string = aiData.choices?.[0]?.message?.content || "[]";
+        const content: string = aiData.response || "[]";
         const jsonMatch = content.match(/\[[\d,\s]*\]/);
         const indices: number[] = jsonMatch ? (JSON.parse(jsonMatch[0]) as number[]) : [];
 
@@ -124,7 +117,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
         res.json({ success: true, blocks: matchedBlocks });
     } catch (err) {
-        console.error("query-content error:", err);
+        logger.error({ err }, "query-content error");
         res.status(500).json({
             success: false,
             error: err instanceof Error ? err.message : "Unknown error",

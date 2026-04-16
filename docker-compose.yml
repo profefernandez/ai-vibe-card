@@ -1,0 +1,140 @@
+# Production stack for ai-vibe-card.
+#
+# Bring up:        docker compose up -d
+# Apply migrations: docker compose run --rm migrate
+# View logs:       docker compose logs -f api
+# Stop:            docker compose down            (data preserved)
+# Wipe:            docker compose down -v         (DESTROYS data — be sure)
+#
+# SPanel must reverse-proxy ai.60wattsofclarity.com → 127.0.0.1:8080
+#
+# Required env (in .env beside this file):
+#   POSTGRES_PASSWORD     strong password for the app's DB user
+#   JWT_SECRET            >= 32 chars, random
+#   ENCRYPTION_KEY        64-char hex (see api/.env.example)
+#   CORS_ORIGINS          https://ai.60wattsofclarity.com
+#   plus optional API integrations (FIRECRAWL_API_KEY, AI_*, LEMONADE_*)
+
+name: aivibe
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aivibe_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: aivibe_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aivibe_user -d aivibe_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *default-logging
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgresql://aivibe_user:${POSTGRES_PASSWORD}@postgres:5432/aivibe_db
+      DB_SSL: "false"            # internal docker network
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS required}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      AI_API_URL: ${AI_API_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      LEMONADE_API_KEY: ${LEMONADE_API_KEY:-}
+      LEMONADE_CONTENT_ID: ${LEMONADE_CONTENT_ID:-}
+      LEMONADE_SECURITY_ID: ${LEMONADE_SECURITY_ID:-}
+      REFRESH_SECRET: ${REFRESH_SECRET:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - uploads:/app/dist/uploads
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *default-logging
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      # Bind to localhost only — SPanel's nginx proxies to this.
+      - "127.0.0.1:8080:8080"
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging: *default-logging
+
+  # One-shot migration runner. Does not stay running.
+  # Usage:  docker compose run --rm migrate
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://aivibe_user:${POSTGRES_PASSWORD}@postgres:5432/aivibe_db
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    networks:
+      - internal
+    # node-pg-migrate runs against the migrations compiled into dist/migrations
+    # by the api build stage. Failure here does NOT take down the running api.
+    entrypoint: ["npx"]
+    command: ["node-pg-migrate", "-m", "dist/migrations", "-j", "js", "up"]
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads:
+    driver: local
+
+networks:
+  internal:
+    driver: bridge

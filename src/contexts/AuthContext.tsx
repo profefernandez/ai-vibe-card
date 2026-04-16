@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { apiClient } from "@/lib/apiClient";
 import type { User, Session } from "@/types";
 
@@ -25,19 +24,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         apiClient.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                setUser(session.user);
-            } else if (!import.meta.env.PROD) {
-                // No real session in dev mode — use dev user so admin is accessible
-                console.warn("[AuthContext] No session — using dev user fallback");
-                setUser({ id: "dev-user", email: "dev@localhost" });
-            }
+            setUser(session?.user ?? null);
             setLoading(false);
         }).catch(() => {
-            if (!import.meta.env.PROD) {
-                console.warn("[AuthContext] API unreachable — using dev user fallback");
-                setUser({ id: "dev-user", email: "dev@localhost" });
-            }
+            setUser(null);
             setLoading(false);
         });
 
