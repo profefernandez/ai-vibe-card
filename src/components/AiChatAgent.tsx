@@ -50,7 +50,7 @@ function clearSession() {
 const DEFAULT_GREETING: ChatMessage = {
   role: "assistant",
   content:
-    "Hello. I'm the AI assistant for this card. Ask me about services, pricing, availability, or anything else you'd like to know.",
+    "Hello. I'm the AI assistant for this card. Ask me anything you'd like to know.",
 };
 
 interface AiChatAgentProps {

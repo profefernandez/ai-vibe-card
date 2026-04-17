@@ -1,9 +1,7 @@
 import HeroSection from "@/components/HeroSection";
-import ServicesSection from "@/components/ServicesSection";
 import ValueProps from "@/components/ValueProps";
 import AiChatAgent from "@/components/AiChatAgent";
 import { Link } from "react-router-dom";
-import { useState, useCallback } from "react";
 
 const SettingsIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -21,16 +19,6 @@ const LoginIcon = () => (
 );
 
 const Index = () => {
-  const [chatQuestion, setChatQuestion] = useState<string | null>(null);
-
-  const handleAskAbout = useCallback((question: string) => {
-    setChatQuestion(question);
-    // Scroll to the chat section
-    setTimeout(() => {
-      document.getElementById("ai-chat-section")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
-  }, []);
-
   return (
     <div className="min-h-screen bg-gradient-dark relative">
       {/* Owner controls — fixed top-right, subtle */}
@@ -69,14 +57,6 @@ const Index = () => {
         <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
       </div>
 
-      {/* ── Services ── */}
-      <ServicesSection onAskAbout={handleAskAbout} />
-
-      {/* ── Divider ── */}
-      <div className="w-full max-w-lg mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
-      </div>
-
       {/* ── AI Chat section ── */}
       <section
         id="ai-chat-section"
@@ -92,11 +72,7 @@ const Index = () => {
               Grounded in the NASW Code of Ethics. Trained on this practice context.
             </p>
           </div>
-          <AiChatAgent
-            siteId={null}
-            initialMessage={chatQuestion}
-            onMessageConsumed={() => setChatQuestion(null)}
-          />
+          <AiChatAgent siteId={null} />
         </div>
       </section>
 
