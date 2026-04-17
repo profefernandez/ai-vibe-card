@@ -1,8 +1,57 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiClient as db } from "@/lib/apiClient";
 import type { ChatMessage } from "@/types";
 import { QUICK_PROMPTS } from "@/lib/constants";
+
+// ── Persistence keys ──────────────────────────────────────────────────────────
+const LS_MESSAGES_KEY = "avc_chat_messages";
+const LS_CONV_ID_KEY  = "avc_conv_id";
+const SESSION_TTL_MS  = 24 * 60 * 60 * 1000; // 24 hours
+
+interface PersistedSession {
+  messages: ChatMessage[];
+  conversationId: string | null;
+  savedAt: number;
+}
+
+function loadSession(): PersistedSession | null {
+  try {
+    const raw = localStorage.getItem(LS_MESSAGES_KEY);
+    if (!raw) return null;
+    const parsed: PersistedSession = JSON.parse(raw);
+    // Expire sessions older than 24 hours
+    if (Date.now() - parsed.savedAt > SESSION_TTL_MS) {
+      localStorage.removeItem(LS_MESSAGES_KEY);
+      localStorage.removeItem(LS_CONV_ID_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(messages: ChatMessage[], conversationId: string | null) {
+  try {
+    const session: PersistedSession = { messages, conversationId, savedAt: Date.now() };
+    localStorage.setItem(LS_MESSAGES_KEY, JSON.stringify(session));
+  } catch {
+    // Quota exceeded or private browsing — fail silently
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem(LS_MESSAGES_KEY);
+  localStorage.removeItem(LS_CONV_ID_KEY);
+}
+
+// ── Default greeting ──────────────────────────────────────────────────────────
+const DEFAULT_GREETING: ChatMessage = {
+  role: "assistant",
+  content:
+    "Hello. I'm the AI assistant for this card. Ask me about services, pricing, availability, or anything else you'd like to know.",
+};
 
 interface AiChatAgentProps {
   siteId?: string | null;
@@ -25,6 +74,15 @@ const BotIcon = () => (
     <line x1="12" y1="7" x2="12" y2="11" />
     <line x1="8" y1="15" x2="8" y2="17" />
     <line x1="16" y1="15" x2="16" y2="17" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6M14 11v6" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
   </svg>
 );
 
@@ -101,18 +159,24 @@ const MessageBubble = ({ msg }: { msg: ChatMessage }) => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 const AiChatAgent = ({ siteId, initialMessage, onMessageConsumed }: AiChatAgentProps) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "assistant",
-      content:
-        "Hello. I'm the AI assistant for this card. Ask me about services, pricing, availability, or anything else you'd like to know.",
-    },
-  ]);
+  // Initialise from localStorage on first render
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const session = loadSession();
+    return session ? session.messages : [DEFAULT_GREETING];
+  });
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    const session = loadSession();
+    return session ? session.conversationId : null;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Persist to localStorage whenever messages or conversationId change
+  useEffect(() => {
+    saveSession(messages, conversationId);
+  }, [messages, conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,6 +189,12 @@ const AiChatAgent = ({ siteId, initialMessage, onMessageConsumed }: AiChatAgentP
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMessage]);
+
+  const handleClearSession = useCallback(() => {
+    clearSession();
+    setMessages([DEFAULT_GREETING]);
+    setConversationId(null);
+  }, []);
 
   const handleSend = async (text?: string) => {
     if (isTyping) return;
@@ -169,26 +239,41 @@ const AiChatAgent = ({ siteId, initialMessage, onMessageConsumed }: AiChatAgentP
     }
   };
 
+  const showQuickPrompts = messages.length <= 1;
+
   return (
     <div className="flex flex-col h-full bg-background" style={{ minHeight: 440 }}>
 
       {/* Header */}
       <div className="px-5 pt-5 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-            <BotIcon />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground tracking-tight">AI Assistant</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <StatusDot />
-              <span className="text-[11px] text-muted-foreground">Online</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+              <BotIcon />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground tracking-tight">AI Assistant</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <StatusDot />
+                <span className="text-[11px] text-muted-foreground">Online</span>
+              </div>
             </div>
           </div>
+          {/* Clear conversation button — only visible when there is history */}
+          {messages.length > 1 && (
+            <button
+              onClick={handleClearSession}
+              title="Clear conversation"
+              aria-label="Clear conversation history"
+              className="p-2 rounded-lg text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary/60 transition-colors"
+            >
+              <TrashIcon />
+            </button>
+          )}
         </div>
 
-        {/* Quick prompts shown only before first user message */}
-        {messages.length <= 1 && (
+        {/* Quick prompts — shown only before first user message */}
+        {showQuickPrompts && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
