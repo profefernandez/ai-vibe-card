@@ -1,11 +1,18 @@
 /**
- * lemonade-chat — visitor chat powered by the card owner's API key.
+ * lemonade-chat — visitor chat for a public card.
  * POST /api/functions/lemonade-chat
  * Body: { message: string, conversation_id?: string, site_id?: string }
  *
- * The card owner configures their own API key (LaunchLemonade, OpenAI,
- * Anthropic, or Google) in the admin ApiConnectorTab. That key is stored
- * encrypted in api_connections and used here to power the chat.
+ * Default path: the platform's LaunchLemonade chat agent
+ * (LEMONADE_API_KEY + LEMONADE_CHAT_ID), billed to the platform. This
+ * is what the vast majority of card owners — non-technical social
+ * workers — get out of the box.
+ *
+ * BYOK path (optional, for advanced users): if the card owner has a
+ * row in api_connections with is_active = true, we use their own
+ * provider/key (LaunchLemonade, OpenAI, Anthropic, or Google). Today
+ * any row opts them in; a dedicated "use my own key" toggle will
+ * come in a follow-up.
  *
  * An app-provided LaunchLemonade security agent screens messages for
  * prompt injection before they reach the chat provider.
@@ -164,13 +171,33 @@ export async function handler(req: Request, res: Response): Promise<void> {
             [site_id],
         );
 
-        if (!connRows.length) {
-            res.status(503).json({ error: "Chat not configured — the card owner needs to set up an API key" });
-            return;
-        }
+        // Default path: platform LaunchLemonade agent (billed to the platform).
+        // BYOK path: present only if the owner has an active api_connections row.
+        const useBYOK = connRows.length > 0;
+        let provider: string;
+        let apiKey: string;
+        let model_name: string | null;
 
-        const { provider, api_key_encrypted, model_name } = connRows[0];
-        const apiKey = isEncrypted(api_key_encrypted) ? decrypt(api_key_encrypted) : api_key_encrypted;
+        if (useBYOK) {
+            provider = connRows[0].provider;
+            model_name = connRows[0].model_name;
+            const enc = connRows[0].api_key_encrypted;
+            apiKey = isEncrypted(enc) ? decrypt(enc) : enc;
+        } else {
+            const platformKey = process.env.LEMONADE_API_KEY;
+            const platformChatId = process.env.LEMONADE_CHAT_ID;
+            if (!platformKey || !platformChatId) {
+                logger.warn(
+                    { site_id },
+                    "lemonade-chat: platform Lemonade not configured (LEMONADE_API_KEY / LEMONADE_CHAT_ID missing) and no BYOK row",
+                );
+                res.status(503).json({ error: "Chat is temporarily unavailable" });
+                return;
+            }
+            provider = "lemonade";
+            apiKey = platformKey;
+            model_name = platformChatId;
+        }
 
         // ── Fetch site content for context ────────────────────────────────
         let siteContext = "";
@@ -259,7 +286,13 @@ export async function handler(req: Request, res: Response): Promise<void> {
             action: "lemonade_chat",
             ip: req.ip,
             userAgent: req.headers["user-agent"],
-            meta: { site_id, provider, tokens_used: result.tokens_used, conversation_id: result.conversation_id },
+            meta: {
+                site_id,
+                provider,
+                byok: useBYOK,
+                tokens_used: result.tokens_used,
+                conversation_id: result.conversation_id,
+            },
         });
 
         res.json({
