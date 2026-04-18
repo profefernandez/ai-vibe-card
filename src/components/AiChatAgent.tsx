@@ -5,8 +5,10 @@ import type { ChatMessage } from "@/types";
 import { QUICK_PROMPTS } from "@/lib/constants";
 
 // ── Persistence keys ──────────────────────────────────────────────────────────
-const LS_MESSAGES_KEY = "avc_chat_messages";
-const LS_CONV_ID_KEY  = "avc_conv_id";
+// Bump the version suffix when the greeting / prompt chips / message schema
+// changes in a way that old cached sessions would show stale content.
+const LS_MESSAGES_KEY = "avc_chat_messages_v2";
+const LS_CONV_ID_KEY  = "avc_conv_id_v2";
 const SESSION_TTL_MS  = 24 * 60 * 60 * 1000; // 24 hours
 
 interface PersistedSession {
@@ -44,6 +46,11 @@ function saveSession(messages: ChatMessage[], conversationId: string | null) {
 function clearSession() {
   localStorage.removeItem(LS_MESSAGES_KEY);
   localStorage.removeItem(LS_CONV_ID_KEY);
+  // Also sweep legacy pre-v2 keys so stale cached greetings never re-surface.
+  try {
+    localStorage.removeItem("avc_chat_messages");
+    localStorage.removeItem("avc_conv_id");
+  } catch { /* ignore */ }
 }
 
 // ── Default greeting ──────────────────────────────────────────────────────────
