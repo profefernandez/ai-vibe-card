@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiClient as db } from "@/lib/apiClient";
 import { EXPLORE_SUGGESTIONS } from "@/lib/constants";
@@ -6,9 +6,15 @@ import ReactMarkdown from "react-markdown";
 
 interface ExplorePanelProps {
   siteId?: string | null;
+  profileId?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
 }
+
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+type FeedbackRating = "up" | "down";
+type FeedbackStatus = "idle" | "pending-comment" | "submitting" | "done";
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
 const SearchIcon = () => (
@@ -31,13 +37,112 @@ const SpinnerIcon = () => (
   </svg>
 );
 
-const ExplorePanel = ({ siteId, onSearch, onClose }: ExplorePanelProps) => {
+const ThumbsUpIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M7 10v12" />
+    <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L15 2a3.13 3.13 0 0 1 0 3.88Z" />
+  </svg>
+);
+
+const ThumbsDownIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17 14V2" />
+    <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L9 22a3.13 3.13 0 0 1 0-3.88Z" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+async function postFeedback(payload: {
+  profile_id?: string | null;
+  rating: FeedbackRating;
+  comment?: string;
+  question_text?: string;
+  answer_text?: string;
+  conversation_id?: string | null;
+}): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        profile_id: payload.profile_id || undefined,
+        conversation_id: payload.conversation_id || undefined,
+      }),
+    });
+  } catch {
+    // Silent — feedback is fire-and-forget. Never block the UI on it.
+  }
+}
+
+const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [noContent, setNoContent] = useState(false);
+
+  // Feedback state — scoped to the currently displayed assistant reply.
+  // Reset on every new query/answer so each reply gets its own rating.
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
+  const [feedbackRating, setFeedbackRating] = useState<FeedbackRating | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+
+  useEffect(() => {
+    setFeedbackStatus("idle");
+    setFeedbackRating(null);
+    setFeedbackComment("");
+  }, [activeQuery, answer]);
+
+  const handleRate = (rating: FeedbackRating) => {
+    if (feedbackStatus !== "idle") return;
+    setFeedbackRating(rating);
+
+    // Snapshot the current user question + assistant answer at rate time.
+    const snapshot = {
+      profile_id: profileId ?? null,
+      rating,
+      question_text: activeQuery ?? undefined,
+      answer_text: answer ?? undefined,
+      conversation_id: conversationId,
+    };
+
+    if (rating === "up") {
+      // Thumbs-up: single POST, no comment prompt.
+      setFeedbackStatus("done");
+      void postFeedback(snapshot);
+    } else {
+      // Thumbs-down: send the rating immediately so we capture it even if the
+      // user doesn't type a follow-up comment. The optional comment is then
+      // sent as a second POST if provided. (Chose this over a held-request
+      // approach because it guarantees the signal lands even if the user
+      // closes the panel mid-comment.)
+      void postFeedback(snapshot);
+      setFeedbackStatus("pending-comment");
+    }
+  };
+
+  const handleSubmitComment = () => {
+    const trimmed = feedbackComment.trim();
+    setFeedbackStatus("submitting");
+    if (trimmed.length > 0 && feedbackRating) {
+      void postFeedback({
+        profile_id: profileId ?? null,
+        rating: feedbackRating,
+        comment: trimmed.slice(0, 2000),
+        question_text: activeQuery ?? undefined,
+        answer_text: answer ?? undefined,
+        conversation_id: conversationId,
+      });
+    }
+    setFeedbackStatus("done");
+  };
 
   const handleSearch = async (text?: string) => {
     const searchText = text || query.trim();
@@ -186,6 +291,63 @@ const ExplorePanel = ({ siteId, onSearch, onClose }: ExplorePanelProps) => {
                 <p className="text-xs text-muted-foreground mb-2 font-medium">{activeQuery}</p>
                 <div className="prose prose-sm prose-invert max-w-none text-foreground/90 leading-relaxed">
                   <ReactMarkdown>{answer}</ReactMarkdown>
+                </div>
+
+                {/* Feedback row — anonymous thumbs-up / thumbs-down. */}
+                <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-2">
+                  {feedbackStatus === "idle" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleRate("up")}
+                        aria-label="Rate response helpful"
+                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1"
+                      >
+                        <ThumbsUpIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRate("down")}
+                        aria-label="Rate response not helpful"
+                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+                      >
+                        <ThumbsDownIcon />
+                      </button>
+                    </>
+                  )}
+
+                  {feedbackStatus === "pending-comment" && (
+                    <div className="w-full flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-muted-foreground/60">
+                        {feedbackRating === "up" ? <ThumbsUpIcon /> : <ThumbsDownIcon />}
+                        <span className="text-[11px]">Thanks for the feedback.</span>
+                      </div>
+                      <textarea
+                        value={feedbackComment}
+                        onChange={(e) => setFeedbackComment(e.target.value)}
+                        placeholder="Anything we should know? (optional)"
+                        maxLength={2000}
+                        rows={2}
+                        className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSubmitComment}
+                          className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors"
+                        >
+                          Send
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(feedbackStatus === "submitting" || feedbackStatus === "done") && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground/70">
+                      <CheckIcon />
+                      <span className="text-[11px]">Thanks for the feedback.</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">

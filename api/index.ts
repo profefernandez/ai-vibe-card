@@ -33,6 +33,7 @@ import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
 import { router as uploadRouter } from "./routes/upload.js";
 import { router as cardRouter } from "./routes/card.js";
+import { router as feedbackRouter } from "./routes/feedback.js";
 import { db } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -178,6 +179,7 @@ app.use("/api/functions", functionsRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/card", cardRouter);
 app.use("/api/connections", cardRouter);
+app.use("/api/feedback", feedbackRouter);
 
 // Dynamic robots.txt — renders structured JSON into standard robots.txt format
 app.get("/robots.txt", async (_req, res) => {
