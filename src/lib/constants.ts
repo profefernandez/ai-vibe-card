@@ -48,7 +48,7 @@ export const ACCENT_COLORS = [
     { name: "cyan", hsl: "189 94% 43%", bg: "bg-cyan-600" },
 ] as const;
 
-// ─── Quick Prompts (used by both ExplorePanel and AiChatAgent) ────────────────
+// ─── Quick Prompts (used by ExplorePanel) ────────────────────────────────────
 
 export const QUICK_PROMPTS = [
     "What services do you offer?",

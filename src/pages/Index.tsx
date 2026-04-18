@@ -1,6 +1,4 @@
 import HeroSection from "@/components/HeroSection";
-import ValueProps from "@/components/ValueProps";
-import AiChatAgent from "@/components/AiChatAgent";
 import { Link } from "react-router-dom";
 
 const SettingsIcon = () => (
@@ -43,47 +41,6 @@ const Index = () => {
 
       {/* ── Card section ── */}
       <HeroSection />
-
-      {/* ── Divider ── */}
-      <div className="w-full max-w-lg mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
-      </div>
-
-      {/* ── Value props (what this card does) ── */}
-      <ValueProps />
-
-      {/* ── Divider ── */}
-      <div className="w-full max-w-lg mx-auto px-6">
-        <div className="h-px bg-gradient-to-r from-transparent via-border/40 to-transparent" />
-      </div>
-
-      {/* ── AI Chat section ── */}
-      <section
-        id="ai-chat-section"
-        className="px-4 py-14 flex flex-col items-center"
-        aria-label="Ask the AI"
-      >
-        <div className="w-full max-w-lg">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold text-foreground tracking-tight">
-              Ask the AI
-            </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              Grounded in the NASW Code of Ethics. Trained on this practice context.
-            </p>
-          </div>
-          <AiChatAgent siteId={null} />
-        </div>
-      </section>
-
-      {/* ── Footer ── */}
-      <footer className="text-center py-8 px-4 border-t border-border/20">
-        <p className="text-xs text-muted-foreground/50">
-          Powered by{" "}
-          <span className="text-primary/70 font-medium">60 Watts of Clarity</span>
-          {" "}· AI-assisted professional identity
-        </p>
-      </footer>
     </div>
   );
 };
