@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Loader2, LogOut, ExternalLink, Copy, Check } from "lucide-react";
 
 import AdminSidebar, { type AdminSection } from "@/components/admin/AdminSidebar";
+import OnboardingWizard from "@/components/admin/OnboardingWizard";
 import SiteImportTab from "@/components/admin/SiteImportTab";
 import ContentManagerTab from "@/components/admin/ContentManagerTab";
 import ApiConnectorTab from "@/components/admin/ApiConnectorTab";
@@ -34,6 +35,8 @@ const Admin = () => {
   const [activeSection, setActiveSection] = useState<AdminSection>("import");
   const [slug, setSlug] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  // null = not-yet-checked; true/false = needs onboarding or not
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -55,8 +58,28 @@ const Admin = () => {
         // API may be unavailable — admin still renders with empty data
       });
       fetchSlug().catch(() => { /* ignore */ });
+      checkOnboarding().catch(() => {
+        // If we can't check, don't block — assume onboarded.
+        setNeedsOnboarding(false);
+      });
     }
   }, [user]);
+
+  const checkOnboarding = async () => {
+    if (!user) return;
+    const { data } = await db
+      .from("profiles")
+      .select("display_name")
+      .eq("user_id", user.id)
+      .limit(1);
+    const row = Array.isArray(data) && data[0] ? (data[0] as { display_name?: string | null }) : null;
+    setNeedsOnboarding(!row?.display_name);
+  };
+
+  const handleOnboardingDone = async () => {
+    setNeedsOnboarding(false);
+    await fetchSlug().catch(() => { /* ignore */ });
+  };
 
   // Re-fetch slug when user visits Connections (where slug is edited)
   useEffect(() => {
@@ -112,6 +135,20 @@ const Admin = () => {
   }
 
   if (!user) return null;
+
+  // Show a brief spinner while we determine whether to render the wizard —
+  // prevents the admin flashing before the wizard mounts.
+  if (needsOnboarding === null) {
+    return (
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (needsOnboarding) {
+    return <OnboardingWizard user={user} onDone={handleOnboardingDone} />;
+  }
 
   const renderContent = () => {
     switch (activeSection) {
