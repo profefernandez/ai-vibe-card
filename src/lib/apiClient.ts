@@ -235,15 +235,29 @@ const auth = {
         email: string;
         password: string;
         options?: Record<string, unknown>;
-    }): Promise<{ error: Error | null }> {
+    }): Promise<{ error: Error | null; autoLoggedIn: boolean }> {
         try {
-            await apiFetch("/auth/register", {
+            const data = (await apiFetch("/auth/register", {
                 method: "POST",
                 body: JSON.stringify({ email, password }),
-            });
-            return { error: null };
+            })) as { user?: User; token?: string; message?: string };
+
+            // New-user path: backend returns { user, token } → log them in immediately.
+            if (data.user && data.token) {
+                const session: Session = { user: data.user, token: data.token };
+                saveSession(session);
+                notifyListeners("SIGNED_IN", session);
+                return { error: null, autoLoggedIn: true };
+            }
+
+            // Existing-user path: backend returns a generic message without credentials
+            // (to avoid user enumeration). Caller should prompt them to sign in.
+            return { error: null, autoLoggedIn: false };
         } catch (err) {
-            return { error: err instanceof Error ? err : new Error(String(err)) };
+            return {
+                error: err instanceof Error ? err : new Error(String(err)),
+                autoLoggedIn: false,
+            };
         }
     },
 

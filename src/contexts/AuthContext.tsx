@@ -6,7 +6,10 @@ interface AuthContextValue {
     user: User | null;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-    signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+    signUp: (
+        email: string,
+        password: string,
+    ) => Promise<{ error: Error | null; autoLoggedIn: boolean }>;
     signOut: () => Promise<void>;
 }
 
@@ -44,7 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const signUp = useCallback(async (email: string, password: string) => {
-        return apiClient.auth.signUp({ email, password });
+        const result = await apiClient.auth.signUp({ email, password });
+        if (result.autoLoggedIn) {
+            const { data: { session } } = await apiClient.auth.getSession();
+            setUser(session?.user ?? null);
+        }
+        return result;
     }, []);
 
     const signOut = useCallback(async () => {

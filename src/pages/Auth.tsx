@@ -21,9 +21,17 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password);
+        const { error, autoLoggedIn } = await signUp(email, password);
         if (error) throw error;
-        toast({ title: "Check your email", description: "We sent you a verification link." });
+        if (autoLoggedIn) {
+          toast({ title: "Welcome", description: "Let's set up your card." });
+          navigate("/admin");
+        } else {
+          // Existing email — backend returned a generic response to avoid
+          // confirming the account exists. Send them to sign in.
+          toast({ title: "Please sign in", description: "An account with that email may already exist." });
+          setIsSignUp(false);
+        }
       } else {
         const { error } = await signIn(email, password);
         if (error) throw error;

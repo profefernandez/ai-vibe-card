@@ -38,9 +38,10 @@ router.post("/register", async (req, res) => {
     try {
         const existing = await client.query("SELECT id FROM users WHERE email = $1", [email]);
         if (existing.rows.length > 0) {
-            // Return same response as success to prevent user enumeration
+            // Return same generic response as success to prevent user enumeration.
+            // Note: no token issued — existing user still needs to sign in explicitly.
             client.release();
-            res.status(200).json({ message: "Registration processed. Please check your email or sign in." });
+            res.status(200).json({ message: "Registration processed. Please sign in." });
             return;
         }
 
@@ -77,7 +78,23 @@ router.post("/register", async (req, res) => {
 
         await client.query("COMMIT");
 
-        res.status(200).json({ message: "Registration processed. Please check your email or sign in." });
+        // Auto-login: issue a JWT + session so the user lands in /admin without a second round-trip.
+        const token = jwt.sign(
+            { sub: user.id, email: user.email, org: org.id },
+            process.env.JWT_SECRET as string,
+            { expiresIn: TOKEN_TTL },
+        );
+        const tokenHash = hashToken(token);
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await db.query(
+            `INSERT INTO sessions (user_id, token_hash, user_agent, ip_address, expires_at)
+             VALUES ($1, $2, $3, $4::inet, $5)`,
+            [user.id, tokenHash, req.get("user-agent") || null, req.ip || null, expiresAt.toISOString()],
+        );
+
+        logAudit({ userId: user.id, action: "register", ip: req.ip, userAgent: req.get("user-agent") });
+
+        res.status(200).json({ user: { id: user.id, email: user.email }, token });
     } catch (err) {
         await client.query("ROLLBACK").catch(() => { /* nothing */ });
         logger.error({ err }, "register error");

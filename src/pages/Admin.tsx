@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient as db } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import type { Site } from "@/types";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Loader2, LogOut, ExternalLink } from "lucide-react";
+import { Loader2, LogOut, ExternalLink, Copy, Check } from "lucide-react";
 
 import AdminSidebar, { type AdminSection } from "@/components/admin/AdminSidebar";
 import SiteImportTab from "@/components/admin/SiteImportTab";
@@ -28,8 +29,11 @@ const sectionTitles: Record<AdminSection, string> = {
 
 const Admin = () => {
   const { user, loading, signOut } = useAuth();
+  const { toast } = useToast();
   const [sites, setSites] = useState<Site[]>([]);
   const [activeSection, setActiveSection] = useState<AdminSection>("import");
+  const [slug, setSlug] = useState<string>("");
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
   const mainRef = useRef<HTMLElement>(null);
 
@@ -50,8 +54,16 @@ const Admin = () => {
       fetchSites().catch(() => {
         // API may be unavailable — admin still renders with empty data
       });
+      fetchSlug().catch(() => { /* ignore */ });
     }
   }, [user]);
+
+  // Re-fetch slug when user visits Connections (where slug is edited)
+  useEffect(() => {
+    if (user && activeSection === "cards") {
+      fetchSlug().catch(() => { /* ignore */ });
+    }
+  }, [activeSection, user]);
 
   const fetchSites = async () => {
     const { data } = await db
@@ -59,6 +71,31 @@ const Admin = () => {
       .select("*")
       .order("created_at", { ascending: false });
     setSites((data as Site[]) || []);
+  };
+
+  const fetchSlug = useCallback(async () => {
+    if (!user) return;
+    const { data } = await db
+      .from("profiles")
+      .select("slug")
+      .eq("user_id", user.id)
+      .limit(1);
+    const row = Array.isArray(data) && data[0] ? (data[0] as { slug?: string }) : null;
+    setSlug(row?.slug ?? "");
+  }, [user]);
+
+  const cardUrl = slug ? `${window.location.origin}/card/${slug}` : "";
+
+  const copyCardUrl = async () => {
+    if (!cardUrl) return;
+    try {
+      await navigator.clipboard.writeText(cardUrl);
+      setCopied(true);
+      toast({ title: "Card URL copied" });
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ title: "Copy failed", variant: "destructive" });
+    }
   };
 
   const handleSignOut = async () => {
@@ -113,14 +150,49 @@ const Admin = () => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4" role="banner">
-            <div className="flex items-center gap-3">
+          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4 gap-3" role="banner">
+            <div className="flex items-center gap-3 min-w-0">
               <SidebarTrigger aria-label="Toggle sidebar" />
-              <h1 className="text-lg font-semibold text-foreground font-sans">
+              <h1 className="text-lg font-semibold text-foreground font-sans shrink-0">
                 {sectionTitles[activeSection]}
               </h1>
             </div>
-            <nav className="flex items-center gap-2" aria-label="Admin actions">
+
+            {/* Card URL badge — primary public artifact the user needs */}
+            <div className="flex-1 flex justify-center min-w-0">
+              {slug ? (
+                <div className="hidden sm:flex items-center gap-2 max-w-full px-3 py-1.5 rounded-full bg-secondary/60 border border-border/40">
+                  <span className="text-xs text-muted-foreground shrink-0">Your card:</span>
+                  <a
+                    href={cardUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-primary truncate hover:underline"
+                    title={cardUrl}
+                  >
+                    {cardUrl.replace(/^https?:\/\//, "")}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={copyCardUrl}
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                    aria-label="Copy card URL"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSectionChange("cards")}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 text-xs font-medium text-primary hover:bg-primary/15 transition-colors"
+                >
+                  Set your card URL →
+                </button>
+              )}
+            </div>
+
+            <nav className="flex items-center gap-2 shrink-0" aria-label="Admin actions">
               <Button variant="ghost" size="sm" onClick={() => navigate("/")} aria-label="View business card">
                 <ExternalLink className="w-4 h-4 mr-1" aria-hidden="true" /> View Card
               </Button>
