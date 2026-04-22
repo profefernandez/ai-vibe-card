@@ -1,0 +1,81 @@
+name: Deploy to ai.60wattsofclarity.com
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: /home/60wattsofclaritycom/ai.60wattsofclarity.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Ensure deploy directory exists
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/id_ed25519 \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ${{ env.DEPLOY_PATH }}"
+
+      - name: Rsync source to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/id_ed25519" \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='node_modules/' \
+            --exclude='dist/' \
+            --exclude='.env' \
+            --exclude='api/node_modules/' \
+            --exclude='api/dist/' \
+            --exclude='api/.env' \
+            --exclude='ai-vibe-card.zip' \
+            --exclude='.deploy/' \
+            ./ ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ env.DEPLOY_PATH }}/
+
+      - name: Build, migrate, and restart stack
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} -i ~/.ssh/id_ed25519 \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} \
+            "set -e
+             cd ${{ env.DEPLOY_PATH }}
+             if [ ! -f .env ]; then
+               echo 'ERROR: .env is missing on the server. Create it from .env.example (chmod 600) before deploying.' >&2
+               exit 1
+             fi
+             docker compose build
+             docker compose up -d postgres
+             docker compose --profile tools run --rm -T migrate
+             docker compose up -d
+             docker compose ps"
+
+      - name: Smoke test
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS --max-time 5 https://ai.60wattsofclarity.com/api/ready > /dev/null; then
+              echo "Ready."
+              exit 0
+            fi
+            echo "Waiting for /api/ready... ($i)"
+            sleep 3
+          done
+          echo "Smoke test failed — /api/ready did not respond." >&2
+          exit 1
