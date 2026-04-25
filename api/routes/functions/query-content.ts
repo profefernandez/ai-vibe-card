@@ -8,13 +8,14 @@
  *   LEMONADE_CONTENT_ID — content agent ID
  */
 
-import type { Request, Response } from "express";
+import type { Response } from "express";
 import { db } from "../../db.js";
+import type { AuthRequest } from "../../middleware/auth.js";
 import { sanitiseInput } from "../../lib/sanitise.js";
 import { logAudit } from "../../lib/audit.js";
 import { logger } from "../../logger.js";
 
-export async function handler(req: Request, res: Response): Promise<void> {
+export async function handler(req: AuthRequest, res: Response): Promise<void> {
     try {
         const { query, site_id } = req.body as { query?: string; site_id?: string };
         if (!query) {
@@ -37,7 +38,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         // Verify the authenticated user owns this site
         const { rows: siteRows } = await db.query(
             "SELECT id FROM sites WHERE id = $1 AND user_id = $2",
-            [site_id, (req as any).user?.id],
+            [site_id, req.user!.id],
         );
         if (siteRows.length === 0) {
             res.status(403).json({ success: false, error: "Site not found or access denied" });
@@ -108,7 +109,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
         // Audit log — track content queries
         logAudit({
-            userId: (req as any).user?.id,
+            userId: req.user!.id,
             action: "query_content",
             ip: req.ip,
             userAgent: req.headers["user-agent"],

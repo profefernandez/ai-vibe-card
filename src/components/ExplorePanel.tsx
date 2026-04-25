@@ -64,6 +64,7 @@ async function postFeedback(payload: {
   question_text?: string;
   answer_text?: string;
   conversation_id?: string | null;
+  feedback_token: string;
 }): Promise<void> {
   try {
     await fetch(`${API_BASE}/feedback`, {
@@ -88,6 +89,14 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   const [loading, setLoading] = useState(false);
   const [noContent, setNoContent] = useState(false);
 
+  // Per-response binding values — the server returns a single-use HMAC
+  // feedback_token bound to (profile_id, conversation_id, hash(answer))
+  // when this exact response was generated. Without it the API rejects
+  // feedback. profile_id from chat response overrides the prop default
+  // when present (the server resolves the site owner authoritatively).
+  const [feedbackToken, setFeedbackToken] = useState<string | null>(null);
+  const [boundProfileId, setBoundProfileId] = useState<string | null>(null);
+
   // Feedback state — scoped to the currently displayed assistant reply.
   // Reset on every new query/answer so each reply gets its own rating.
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
@@ -102,45 +111,47 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
   const handleRate = (rating: FeedbackRating) => {
     if (feedbackStatus !== "idle") return;
+    if (!feedbackToken) return; // can't submit without a server-issued token
+
     setFeedbackRating(rating);
 
-    // Snapshot the current user question + assistant answer at rate time.
-    const snapshot = {
-      profile_id: profileId ?? null,
-      rating,
-      question_text: activeQuery ?? undefined,
-      answer_text: answer ?? undefined,
-      conversation_id: conversationId,
-    };
-
     if (rating === "up") {
-      // Thumbs-up: single POST, no comment prompt.
+      // Thumbs-up: submit immediately, no comment prompt.
       setFeedbackStatus("done");
-      void postFeedback(snapshot);
+      void postFeedback({
+        profile_id: boundProfileId ?? profileId ?? null,
+        rating,
+        question_text: activeQuery ?? undefined,
+        answer_text: answer ?? undefined,
+        conversation_id: conversationId,
+        feedback_token: feedbackToken,
+      });
     } else {
-      // Thumbs-down: send the rating immediately so we capture it even if the
-      // user doesn't type a follow-up comment. The optional comment is then
-      // sent as a second POST if provided. (Chose this over a held-request
-      // approach because it guarantees the signal lands even if the user
-      // closes the panel mid-comment.)
-      void postFeedback(snapshot);
+      // Thumbs-down: open the comment field. Submission happens on Send so
+      // we use the single-use token exactly once (per-response). If the user
+      // navigates away without clicking Send the rating is dropped — this
+      // is the cost of replay-safe single-use tokens, and it lines up with
+      // the security trade-off discussed in the API plan (Phase 4 / M7).
       setFeedbackStatus("pending-comment");
     }
   };
 
   const handleSubmitComment = () => {
+    if (!feedbackRating || !feedbackToken) {
+      setFeedbackStatus("done");
+      return;
+    }
     const trimmed = feedbackComment.trim();
     setFeedbackStatus("submitting");
-    if (trimmed.length > 0 && feedbackRating) {
-      void postFeedback({
-        profile_id: profileId ?? null,
-        rating: feedbackRating,
-        comment: trimmed.slice(0, 2000),
-        question_text: activeQuery ?? undefined,
-        answer_text: answer ?? undefined,
-        conversation_id: conversationId,
-      });
-    }
+    void postFeedback({
+      profile_id: boundProfileId ?? profileId ?? null,
+      rating: feedbackRating,
+      comment: trimmed.length > 0 ? trimmed.slice(0, 2000) : undefined,
+      question_text: activeQuery ?? undefined,
+      answer_text: answer ?? undefined,
+      conversation_id: conversationId,
+      feedback_token: feedbackToken,
+    });
     setFeedbackStatus("done");
   };
 
@@ -153,6 +164,8 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
     setLoading(true);
     setNoContent(false);
     setAnswer(null);
+    setFeedbackToken(null);
+    setBoundProfileId(null);
     onSearch?.(searchText);
 
     try {
@@ -165,8 +178,18 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
       });
       if (error) throw error;
 
-      const result = data as { response?: string; conversation_id?: string };
+      const result = data as {
+        response?: string;
+        conversation_id?: string;
+        feedback_token?: string;
+        profile_id?: string;
+      };
       if (result.conversation_id) setConversationId(result.conversation_id);
+      // Capture the binding values returned with the response so the
+      // visitor can echo them on /api/feedback. profile_id from the
+      // server is authoritative (the site owner) and overrides the prop.
+      setFeedbackToken(result.feedback_token ?? null);
+      setBoundProfileId(result.profile_id ?? null);
 
       if (result.response) {
         setAnswer(result.response);

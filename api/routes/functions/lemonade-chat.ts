@@ -24,6 +24,7 @@ import { logger } from "../../logger.js";
 import { decrypt, isEncrypted } from "../../lib/crypto.js";
 import { sanitiseInput, filterOutput } from "../../lib/sanitise.js";
 import { logAudit } from "../../lib/audit.js";
+import { issueFeedbackToken } from "../../lib/feedback-token.js";
 
 const LEMONADE_CHAT_URL = "https://api.launchlemonade.app/v1/chat";
 
@@ -162,14 +163,36 @@ export async function handler(req: Request, res: Response): Promise<void> {
             return;
         }
 
+        // Phase 8 — deterministic BYOK provider pick:
+        //   - Join on `organization_id` instead of `user_id`. Post-Phase-2-org
+        //     scoping, sites and api_connections both carry organization_id;
+        //     joining on user_id was a pre-org-scoping artifact that would
+        //     break for any future shared-org membership.
+        //   - Order by `created_at ASC` so the same row is always picked when
+        //     a user has multiple active providers — without ORDER BY, the
+        //     planner's choice could change between releases, making the
+        //     active provider effectively undefined. (Long-term: an explicit
+        //     `default_provider` column on profiles will replace this.)
         const { rows: connRows } = await db.query(
-            `SELECT ac.provider, ac.api_key_encrypted, ac.model_name
+            `SELECT ac.id, ac.provider, ac.api_key_encrypted, ac.model_name, s.user_id AS site_owner_id
              FROM api_connections ac
-             JOIN sites s ON s.user_id = ac.user_id
+             JOIN sites s ON s.organization_id = ac.organization_id
              WHERE s.id = $1 AND ac.is_active = true
+             ORDER BY ac.created_at ASC
              LIMIT 1`,
             [site_id],
         );
+
+        // Resolve the site owner — used as profile_id for the feedback token
+        // binding even on the platform-default path (no api_connections row).
+        let siteOwnerId: string | null = connRows[0]?.site_owner_id ?? null;
+        if (!siteOwnerId) {
+            const { rows: ownerRows } = await db.query(
+                `SELECT user_id FROM sites WHERE id = $1 LIMIT 1`,
+                [site_id],
+            );
+            siteOwnerId = ownerRows[0]?.user_id ?? null;
+        }
 
         // Default path: platform LaunchLemonade agent (billed to the platform).
         // BYOK path: present only if the owner has an active api_connections row.
@@ -182,7 +205,19 @@ export async function handler(req: Request, res: Response): Promise<void> {
             provider = connRows[0].provider;
             model_name = connRows[0].model_name;
             const enc = connRows[0].api_key_encrypted;
-            apiKey = isEncrypted(enc) ? decrypt(enc) : enc;
+            if (isEncrypted(enc)) {
+                apiKey = decrypt(enc);
+            } else {
+                // Phase 5 transitional: accept plaintext but flag it so we
+                // know to migrate. Once `scripts/audit-api-keys.ts` reports
+                // zero plaintext rows in prod, this branch will be tightened
+                // to throw rather than silently pass the value through.
+                logger.warn(
+                    { connectionId: connRows[0].id, provider },
+                    "lemonade-chat: api_connections row is not encrypted — run scripts/audit-api-keys.ts and migrate",
+                );
+                apiKey = enc;
+            }
         } else {
             const platformKey = process.env.LEMONADE_API_KEY;
             const platformChatId = process.env.LEMONADE_CHAT_ID;
@@ -281,6 +316,18 @@ export async function handler(req: Request, res: Response): Promise<void> {
                 return;
         }
 
+        // Mint a single-use, expiring feedback token bound to this exact
+        // (profile_id, conversation_id, response_text) tuple. The visitor
+        // echoes it back on POST /api/feedback so the rating can be tied
+        // to a real exchange — no anonymous user can poison `% thumbs-down
+        // by card` against an arbitrary profile_id (M7).
+        const filteredResponse = filterOutput(result.response);
+        const feedbackToken = issueFeedbackToken({
+            profileId: siteOwnerId,
+            conversationId: result.conversation_id,
+            answerText: filteredResponse,
+        });
+
         // Audit log
         logAudit({
             action: "lemonade_chat",
@@ -296,9 +343,13 @@ export async function handler(req: Request, res: Response): Promise<void> {
         });
 
         res.json({
-            response: filterOutput(result.response),
+            response: filteredResponse,
             conversation_id: result.conversation_id,
             tokens_used: result.tokens_used,
+            feedback_token: feedbackToken,
+            // Expose the bound profile_id so the client doesn't have to
+            // discover it separately when posting feedback.
+            profile_id: siteOwnerId,
         });
     } catch (err) {
         logger.error({ err }, "lemonade-chat error");

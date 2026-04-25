@@ -9,6 +9,7 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "node:crypto";
 import { db } from "../db.js";
 import { requireAuth, hashToken, type AuthRequest } from "../middleware/auth.js";
 import { logAudit } from "../lib/audit.js";
@@ -21,6 +22,14 @@ const TOKEN_TTL = "7d";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Pre-hashed dummy for constant-time comparison on non-existent users
 const DUMMY_HASH = "$2b$12$LJ3m4ys3Lg7P4ofMrYBZqe1a4oXMKm0JZnSIpOOmQbOeYXXxHBqS6";
+
+// Per-account lockout. The IP-keyed authLimiter (20 attempts / 15 min) doesn't
+// stop a distributed credential-stuffing attack — once `trust proxy` was fixed
+// in Phase 1, an attacker rotating IPs still gets 20 attempts per IP. The
+// per-account counter caps the total work an attacker can do against any
+// single account, regardless of how many IPs they spread across.
+const MAX_FAILED_LOGINS = 10;
+const LOCKOUT_MINUTES = 15;
 
 router.post("/register", async (req, res) => {
     const { email, password } = req.body as { email?: string; password?: string };
@@ -58,7 +67,7 @@ router.post("/register", async (req, res) => {
         // Create personal organization. Slug = sanitized email local-part + random suffix
         // so concurrent signups with similar emails don't collide.
         const localPart = email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-") || "user";
-        const slug = `${localPart}-${Math.random().toString(36).slice(2, 8)}`;
+        const slug = `${localPart}-${randomBytes(3).toString("hex")}`;
 
         const orgRes = await client.query(
             "INSERT INTO organizations (name, slug) VALUES ($1, $2) RETURNING id",
@@ -79,8 +88,10 @@ router.post("/register", async (req, res) => {
         await client.query("COMMIT");
 
         // Auto-login: issue a JWT + session so the user lands in /admin without a second round-trip.
+        // The membership we just created is `owner` — bake that into the JWT so
+        // `requireRole` doesn't need to hit the DB on every request.
         const token = jwt.sign(
-            { sub: user.id, email: user.email, org: org.id },
+            { sub: user.id, email: user.email, org: org.id, role: "owner" },
             process.env.JWT_SECRET as string,
             { expiresIn: TOKEN_TTL },
         );
@@ -114,7 +125,8 @@ router.post("/login", async (req, res) => {
 
     try {
         const result = await db.query(
-            `SELECT u.id, u.email, u.password_hash, m.organization_id
+            `SELECT u.id, u.email, u.password_hash, u.locked_until, u.failed_login_count,
+                    m.organization_id, m.role
              FROM users u
              LEFT JOIN memberships m ON m.user_id = u.id
              WHERE u.email = $1
@@ -123,14 +135,66 @@ router.post("/login", async (req, res) => {
             [email],
         );
         const user = result.rows[0] as
-            | { id: string; email: string; password_hash: string; organization_id: string | null }
+            | {
+                id: string;
+                email: string;
+                password_hash: string;
+                locked_until: Date | null;
+                failed_login_count: number;
+                organization_id: string | null;
+                role: "owner" | "admin" | "member" | null;
+            }
             | undefined;
 
-        // Always run bcrypt.compare to prevent timing-based user enumeration
+        // Always run bcrypt.compare to prevent timing-based user enumeration.
+        // The DUMMY_HASH path keeps the failure timing identical for unknown
+        // emails. We also avoid disclosing lock status to unknown emails for
+        // the same reason — the lockout response below only fires for real
+        // accounts, AFTER bcrypt has run.
         const hashToCheck = user?.password_hash ?? DUMMY_HASH;
         const valid = await bcrypt.compare(password, hashToCheck);
 
+        // Account-level lockout: if the user exists and is currently locked,
+        // refuse without revealing whether the password was correct. We
+        // intentionally don't extend the lockout on attempts during the
+        // window — the attacker has already hit the cap; piling more time on
+        // would just enable an attacker-induced denial-of-service against the
+        // legitimate user.
+        if (user?.locked_until && user.locked_until > new Date()) {
+            logAudit({
+                userId: user.id,
+                action: "failed_login",
+                ip: req.ip,
+                userAgent: req.get("user-agent"),
+                meta: { reason: "locked" },
+            });
+            res.status(423).json({
+                error: "Account temporarily locked due to repeated failed sign-in attempts. Try again later.",
+            });
+            return;
+        }
+
         if (!user || !valid) {
+            // Increment counter and lock if threshold reached. Done in one
+            // statement so concurrent attempts can't race past the cap.
+            if (user) {
+                await db.query(
+                    `UPDATE users
+                     SET failed_login_count = failed_login_count + 1,
+                         locked_until = CASE
+                             WHEN failed_login_count + 1 >= $2 THEN NOW() + ($3 || ' minutes')::INTERVAL
+                             ELSE locked_until
+                         END
+                     WHERE id = $1`,
+                    [user.id, MAX_FAILED_LOGINS, String(LOCKOUT_MINUTES)],
+                );
+                logAudit({
+                    userId: user.id,
+                    action: "failed_login",
+                    ip: req.ip,
+                    userAgent: req.get("user-agent"),
+                });
+            }
             res.status(401).json({ error: "Invalid email or password" });
             return;
         }
@@ -142,8 +206,28 @@ router.post("/login", async (req, res) => {
             return;
         }
 
+        // Successful login — clear the failure counter and any expired lock.
+        if (user.failed_login_count > 0 || user.locked_until) {
+            await db.query(
+                `UPDATE users SET failed_login_count = 0, locked_until = NULL,
+                                  last_sign_in_at = NOW()
+                 WHERE id = $1`,
+                [user.id],
+            );
+        } else {
+            await db.query("UPDATE users SET last_sign_in_at = NOW() WHERE id = $1", [user.id]);
+        }
+
         const token = jwt.sign(
-            { sub: user.id, email: user.email, org: user.organization_id },
+            {
+                sub: user.id,
+                email: user.email,
+                org: user.organization_id,
+                // role may be null for an existing user who was somehow created
+                // without a membership row — keep the claim out in that case so
+                // requireRole falls back to a DB lookup.
+                ...(user.role ? { role: user.role } : {}),
+            },
             process.env.JWT_SECRET as string,
             { expiresIn: TOKEN_TTL },
         );

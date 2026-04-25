@@ -19,15 +19,16 @@
 
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import jwt from "jsonwebtoken";
 import { pinoHttp } from "pino-http";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { logger } from "./logger.js";
+import { verifyJwtWithRotation } from "./middleware/auth.js";
 import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
@@ -58,6 +59,16 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) fatal("Missing required environment variable: JWT_SECRET");
 if (JWT_SECRET.length < 32) fatal("JWT_SECRET must be at least 32 characters");
 
+// Optional rotation secret. When set, requireAuth verifies tokens against
+// JWT_SECRET first and falls back to JWT_SECRET_PREVIOUS — letting us roll
+// the signing key without immediately invalidating every active session.
+// Sign paths always use JWT_SECRET. Rotation procedure documented in
+// CODEBASE.md.
+const JWT_SECRET_PREVIOUS = process.env.JWT_SECRET_PREVIOUS;
+if (JWT_SECRET_PREVIOUS && JWT_SECRET_PREVIOUS.length < 32) {
+    fatal("JWT_SECRET_PREVIOUS must be at least 32 characters when set");
+}
+
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64 || !/^[0-9a-f]{64}$/i.test(ENCRYPTION_KEY)) {
     fatal(
@@ -69,6 +80,11 @@ if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64 || !/^[0-9a-f]{64}$/i.test(E
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? "127.0.0.1";
+
+// Exactly one trusted hop in front of us: the `web` nginx container in
+// docker-compose, which sets X-Forwarded-For. Trusting `1` (not 'uniquelocal')
+// prevents anything else on the docker bridge from spoofing X-Forwarded-For.
+app.set("trust proxy", 1);
 
 // ── Request logging with correlation IDs ─────────────────────────────────────
 app.use(
@@ -106,39 +122,92 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
-// ── Security headers ─────────────────────────────────────────────────────────
+// ── Security headers (helmet) ────────────────────────────────────────────────
+//
+// CSP directives are built from observed usage (grep of src/ + api/), not
+// memory. Notes per directive:
+//   default-src 'self'      — fall-through deny for anything not listed.
+//   script-src 'self'       — Vite emits hashed external modules; no inline.
+//   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com
+//                           — Tailwind / framer-motion inject inline style
+//                             attributes; Google Fonts CSS is loaded from
+//                             fonts.googleapis.com via index.css @import.
+//   font-src 'self' https://fonts.gstatic.com data:
+//                           — Google Fonts ships woff2 from fonts.gstatic.com;
+//                             data: needed for some shadcn icon fonts.
+//   img-src 'self' data: https: blob:
+//                           — Avatars, QR codes (api.qrserver.com), scraped
+//                             site images (arbitrary HTTPS hosts), and
+//                             blob: for client-side image previews.
+//   connect-src 'self'      — Browser only talks to same-origin /api. Every
+//                             cross-origin fetch (OpenAI, Anthropic, Lemonade,
+//                             Firecrawl) is performed server-side. If the
+//                             frontend ever calls a vendor directly, add it.
+//   frame-src 'self' https: — `cta_embed` is owner-supplied DOMPurify-allowed
+//                             iframe HTML; Calendly is the common case but
+//                             Loom/YouTube/Vimeo/Google Calendar are all
+//                             reasonable. Locked to HTTPS only.
+//   object-src 'none'       — no Flash / plugins.
+//   base-uri 'self'         — neutralizes <base href> hijack.
+//   form-action 'self'      — no third-party form posts.
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            useDefaults: false,
+            directives: {
+                "default-src": ["'self'"],
+                "script-src": ["'self'"],
+                "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+                "img-src": ["'self'", "data:", "https:", "blob:"],
+                "connect-src": ["'self'"],
+                "frame-src": ["'self'", "https:"],
+                // Nothing should embed *us*. (frame-src governs what we
+                // embed; frame-ancestors governs who embeds us — different
+                // direction. Replaces the prior X-Frame-Options: DENY.)
+                "frame-ancestors": ["'none'"],
+                "object-src": ["'none'"],
+                "base-uri": ["'self'"],
+                "form-action": ["'self'"],
+            },
+        },
+        // Restore the stricter X-Frame-Options that the manual config used.
+        // Helmet defaults this to SAMEORIGIN; we have no reason to be framed.
+        frameguard: { action: "deny" },
+        // Match the prior Referrer-Policy. Helmet defaults to no-referrer
+        // which is stricter, but breaks 3rd-party referer-aware analytics
+        // we may add later. strict-origin-when-cross-origin sends the
+        // origin only on cross-origin nav and full URL same-origin —
+        // sane default that doesn't leak paths externally.
+        referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+        // Helmet's defaults give us HSTS (long max-age + includeSubDomains +
+        // preload), X-Content-Type-Options, Referrer-Policy strict-origin-
+        // when-cross-origin, and X-Frame-Options DENY. Cross-Origin-*
+        // policies default to same-origin — fine for an SPA + JSON API.
+        // X-XSS-Protection is intentionally omitted (deprecated, can
+        // introduce its own vulnerabilities); we rely on CSP instead.
+    }),
+);
+
+// Permissions-Policy: helmet sets a basic one, but we're stricter — disable
+// camera/mic/geo since none of our flows use them.
 app.use((_req, res, next) => {
-    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-    res.setHeader(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; frame-src https:; connect-src 'self' https:; font-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'",
-    );
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-XSS-Protection", "1; mode=block");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     next();
 });
 
-// CSRF — validate Origin header on state-changing requests
-app.use((req, res, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
-    const origin = req.headers.origin;
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return next();
-    res.status(403).json({ error: "Forbidden: origin not allowed" });
-});
+// (CSRF Origin check removed: auth is Bearer-token-only; no cookies are set
+// anywhere in the API — verified by grep of res.cookie / Set-Cookie. The
+// previous half-check let through requests with no Origin header at all,
+// which is more misleading than helpful. CORS already restricts origins
+// for browser-initiated requests via the `cors` middleware above.)
 
 // ── Rate limiters ────────────────────────────────────────────────────────────
 function userOrIpKey(req: Request): string {
-    try {
-        const header = req.headers.authorization;
-        if (header?.startsWith("Bearer ")) {
-            const payload = jwt.verify(header.slice(7), JWT_SECRET!) as { sub?: string };
-            if (payload?.sub) return `user:${payload.sub}`;
-        }
-    } catch {
-        /* fall through to IP */
+    const header = req.headers.authorization;
+    if (header?.startsWith("Bearer ")) {
+        const payload = verifyJwtWithRotation<{ sub?: string }>(header.slice(7));
+        if (payload?.sub) return `user:${payload.sub}`;
     }
     return ipKeyGenerator(req.ip ?? "unknown");
 }
@@ -148,6 +217,23 @@ const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: 
 const queryContentLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: "Too many queries, please slow down" }, keyGenerator: userOrIpKey });
 const connectLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many connection requests, please try again later" } });
 const connectionQueryLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, message: { error: "Too many AI queries, please slow down" }, keyGenerator: userOrIpKey });
+
+// Cron endpoint protection. Auth is via REFRESH_SECRET (validated inside the
+// handler), but we still rate-limit per token so a leaked secret can't be
+// used to hammer Firecrawl. Key on the SHA-256 of the bearer so we never
+// store the secret itself in the limiter map.
+const refreshLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 5,
+    message: { error: "Too many refresh requests" },
+    keyGenerator: (req) => {
+        const header = req.headers.authorization;
+        if (header?.startsWith("Bearer ")) {
+            return `refresh:${createHash("sha256").update(header.slice(7)).digest("hex")}`;
+        }
+        return ipKeyGenerator(req.ip ?? "unknown");
+    },
+});
 
 // ── Static uploads ───────────────────────────────────────────────────────────
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -171,6 +257,11 @@ app.get("/api/ready", async (_req, res) => {
 app.use("/api/auth", authLimiter, authRouter);
 app.use("/api/functions/lemonade-chat", chatLimiter);
 app.use("/api/functions/query-content", queryContentLimiter);
+app.use("/api/functions/refresh-sites", refreshLimiter);
+// Reuse refreshLimiter for prune-logs — same bearer-secret auth model, same
+// keying strategy. Cap is per-token, so the two cron endpoints share a
+// budget; 5/min is generous for either.
+app.use("/api/functions/prune-logs", refreshLimiter);
 app.use("/api/card/:slug/connect", connectLimiter);
 app.use("/api/connections/:id/query", connectionQueryLimiter);
 

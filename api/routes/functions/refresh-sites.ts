@@ -17,6 +17,7 @@ import { logger } from "../../logger.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
 import { promises as dns } from "node:dns";
 import { timingSafeEqual } from "node:crypto";
+import { safeFetch } from "../../lib/safe-fetch.js";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {
@@ -210,17 +211,16 @@ async function reVerifyDomain(
         return false;
     }
 
-    // Prefer the method used for original verification; fall back to DNS TXT
+    // Prefer the method used for original verification; fall back to DNS TXT.
+    // Uses safeFetch so DNS rebinding / cloud-metadata SSRF is blocked at the
+    // resolve+pin layer — the previous fetch() with `redirect: "follow"` and
+    // no IP guard could be steered to private addresses by a hostile owner.
     if (method === "meta_tag") {
         try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10_000);
-            const resp = await fetch(`https://${domain}`, {
-                headers: { "User-Agent": "60WattVerifyBot/1.0" },
-                signal: controller.signal,
-                redirect: "follow",
+            const resp = await safeFetch(`https://${domain}`, {
+                userAgent: "60WattVerifyBot/1.0",
+                timeoutMs: 10_000,
             });
-            clearTimeout(timeout);
             if (!resp.ok) return false;
             const html = await resp.text();
             const pattern = /<meta\s+[^>]*name\s*=\s*["']60watt-verify["'][^>]*content\s*=\s*["']([^"']+)["'][^>]*\/?>/i;

@@ -55,6 +55,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Bind to host loopback so curl from the VPS (smoke tests, oncall debug)
+    # can hit /api/ready directly without going through the web→nginx proxy.
+    # Public traffic still flows through SPanel → web:8080 → api:3001.
+    ports:
+      - "127.0.0.1:3001:3001"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -63,6 +68,8 @@ services:
       DATABASE_URL: postgresql://aivibe_user:${POSTGRES_PASSWORD}@postgres:5432/aivibe_db
       DB_SSL: "false"            # internal docker network
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET required}
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
+      FEEDBACK_HMAC_SECRET: ${FEEDBACK_HMAC_SECRET:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY required}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS required}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
@@ -82,6 +89,12 @@ services:
       - uploads:/app/dist/uploads
     networks:
       - internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/api/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -95,7 +108,7 @@ services:
     restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     ports:
       # Bind to localhost only — SPanel's nginx proxies to this.
       - "127.0.0.1:8080:8080"

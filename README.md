@@ -33,6 +33,16 @@ cd api && npm run dev &
 npm run dev
 ```
 
+## Pre-commit hooks
+
+This repo uses [pre-commit](https://pre-commit.com/) to run `gitleaks` on every commit so that secrets cannot be pushed accidentally. To enable it in your local clone:
+
+```sh
+pip install pre-commit && pre-commit install
+```
+
+After that, `git commit` will automatically scan staged files; the config lives in `.pre-commit-config.yaml`.
+
 ## Project Structure
 
 ```

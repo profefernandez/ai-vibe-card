@@ -20,6 +20,8 @@ An AI-powered digital business card / personal website. The owner can import the
 | Routing         | React Router v6                                          |
 | Forms           | react-hook-form + Zod                                    |
 
+> Rate limiting uses `express-rate-limit` with its default in-memory store, so scaling the API beyond one replica multiplies every configured limit by N until a Redis-backed store is wired in.
+
 ---
 
 ## Project Structure
@@ -123,7 +125,7 @@ database/
 
 | Table             | Purpose                                                    |
 | ----------------- | ---------------------------------------------------------- |
-| `users`           | Auth accounts (email + bcrypt password hash)               |
+| `users`           | Auth accounts (email + bcrypt password hash). NOTE: the columns `reset_token` and `reset_token_expires_at` exist in the schema (initial migration) but no route currently reads or writes them — password reset is **not yet implemented**. The columns are retained pending that feature; do not drop without coordinating with whoever picks up the reset flow. |
 | `profiles`        | Owner's public card info (name, bio, avatar, Calendly URL) |
 | `sites`           | Imported sites (domain, scrape status, page count)         |
 | `site_pages`      | Raw scraped pages (markdown, html, metadata JSONB)         |

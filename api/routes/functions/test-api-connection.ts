@@ -26,7 +26,7 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
     try {
         // Look up the stored API key for this user + provider
         const { rows } = await db.query(
-            `SELECT api_key_encrypted FROM api_connections WHERE user_id = $1 AND provider = $2`,
+            `SELECT id, api_key_encrypted FROM api_connections WHERE user_id = $1 AND provider = $2`,
             [req.user!.id, provider],
         );
         const raw = rows[0]?.api_key_encrypted;
@@ -34,8 +34,19 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
             res.status(404).json({ success: false, error: "No API key stored for this provider" });
             return;
         }
-        // Decrypt if encrypted, support legacy plaintext gracefully
-        const api_key = isEncrypted(raw) ? decrypt(raw) : raw;
+        // Phase 5 transitional: accept plaintext but flag it so ops knows to
+        // migrate. After scripts/audit-api-keys.ts reports zero plaintext rows
+        // in prod, tighten this branch to throw.
+        let api_key: string;
+        if (isEncrypted(raw)) {
+            api_key = decrypt(raw);
+        } else {
+            logger.warn(
+                { connectionId: rows[0].id, provider },
+                "test-api-connection: api_connections row is not encrypted — run scripts/audit-api-keys.ts and migrate",
+            );
+            api_key = raw;
+        }
 
         let testUrl = "";
         let testHeaders: Record<string, string> = {};

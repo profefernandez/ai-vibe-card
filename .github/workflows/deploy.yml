@@ -19,6 +19,10 @@ jobs:
 
     steps:
       - name: Checkout
+        # TODO: pin to a full 40-char commit SHA. Look up the SHA for the
+        # latest v4.x release at https://github.com/actions/checkout/releases
+        # and replace `v4` with that SHA, keeping the tag in a trailing
+        # comment, e.g. `uses: actions/checkout@<sha>  # v4.2.2`.
         uses: actions/checkout@v4
 
       - name: Set up SSH

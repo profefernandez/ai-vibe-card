@@ -14,6 +14,19 @@ import type { Response } from "express";
 import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
+import { safeFetch, SafeFetchError } from "../../lib/safe-fetch.js";
+
+/**
+ * Public detail enum. Replaces the previous free-form string which leaked
+ * upstream HTTP statuses (a port-scan oracle) and disclosed which check
+ * branch ran. Keep this list small and stable — clients render it as UI.
+ */
+type VerifyDetail =
+    | "verified"
+    | "dns_record_missing"
+    | "meta_tag_missing"
+    | "token_mismatch"
+    | "unreachable";
 
 export async function handler(req: AuthRequest, res: Response): Promise<void> {
     const user = req.user;
@@ -67,19 +80,14 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         return;
     }
 
-    let verified = false;
-    let detail = "";
+    let detail: VerifyDetail;
 
     if (method === "dns_txt") {
-        verified = await checkDnsTxt(domain, token);
-        detail = verified
-            ? "DNS TXT record found"
-            : `No matching TXT record at _60watt-verify.${domain}`;
+        detail = (await checkDnsTxt(domain, token)) ? "verified" : "dns_record_missing";
     } else {
-        const result = await checkMetaTag(domain, token);
-        verified = result.ok;
-        detail = result.detail;
+        detail = await checkMetaTag(domain, token);
     }
+    const verified = detail === "verified";
 
     if (verified) {
         await db.query(
@@ -116,43 +124,37 @@ async function checkDnsTxt(domain: string, token: string): Promise<boolean> {
 
 // ── Meta tag verification ───────────────────────────────────────────────────
 
-async function checkMetaTag(
-    domain: string,
-    token: string,
-): Promise<{ ok: boolean; detail: string }> {
+async function checkMetaTag(domain: string, token: string): Promise<VerifyDetail> {
     const url = `https://${domain}`;
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10_000);
-
-        const resp = await fetch(url, {
-            headers: { "User-Agent": "60WattVerifyBot/1.0" },
-            signal: controller.signal,
-            redirect: "follow",
+        const resp = await safeFetch(url, {
+            userAgent: "60WattVerifyBot/1.0",
+            timeoutMs: 10_000,
         });
-        clearTimeout(timeout);
 
         if (!resp.ok) {
-            return { ok: false, detail: `Homepage returned HTTP ${resp.status}` };
+            // Any non-2xx — caller cannot tell whether it was 4xx, 5xx, or
+            // a redirect we refused to follow. Intentional: avoid leaking
+            // upstream status as a port-scan oracle.
+            return "unreachable";
         }
 
         const html = await resp.text();
-        // Look for <meta name="60watt-verify" content="TOKEN">
+        // Look for <meta name="60watt-verify" content="TOKEN"> in either order
         const pattern = /<meta\s+[^>]*name\s*=\s*["']60watt-verify["'][^>]*content\s*=\s*["']([^"']+)["'][^>]*\/?>/i;
         const altPattern = /<meta\s+[^>]*content\s*=\s*["']([^"']+)["'][^>]*name\s*=\s*["']60watt-verify["'][^>]*\/?>/i;
 
         const match = html.match(pattern) || html.match(altPattern);
-        if (!match) {
-            return { ok: false, detail: "Meta tag <meta name=\"60watt-verify\" ...> not found on homepage" };
-        }
-        if (match[1] !== token) {
-            return { ok: false, detail: "Meta tag found but token does not match" };
-        }
-        return { ok: true, detail: "Meta tag verified" };
+        if (!match) return "meta_tag_missing";
+        if (match[1] !== token) return "token_mismatch";
+        return "verified";
     } catch (err) {
-        return {
-            ok: false,
-            detail: `Could not fetch homepage: ${err instanceof Error ? err.message : "unknown error"}`,
-        };
+        // safeFetch throws SafeFetchError for SSRF / DNS / timeout / network.
+        // All bucketed into "unreachable" for the user — investigate via logs
+        // (the err object is captured by the audit log + pino).
+        if (err instanceof SafeFetchError || err instanceof Error) {
+            return "unreachable";
+        }
+        return "unreachable";
     }
 }

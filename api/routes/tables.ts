@@ -22,6 +22,7 @@
 import { Router } from "express";
 import { db } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { encrypt } from "../lib/crypto.js";
 import { randomUUID } from "node:crypto";
 import { logger } from "../logger.js";
@@ -29,6 +30,12 @@ import { logger } from "../logger.js";
 export const router = Router();
 
 // ── Allowed tables ────────────────────────────────────────────────────────────
+// `connections` is intentionally NOT exposed here. All connection ops go
+// through routes/card.ts, which enforces the requester/owner asymmetry
+// correctly. Exposing it generically created an asymmetric IDOR window
+// (PATCH/DELETE filtered only on owner_id, so requesters could not act on
+// their own outgoing requests via this router — and any caller assuming
+// symmetry would misbehave).
 const ALLOWED_TABLES = new Set([
     "profiles",
     "sites",
@@ -36,7 +43,6 @@ const ALLOWED_TABLES = new Set([
     "content_blocks",
     "ai_preferences",
     "api_connections",
-    "connections",
 ]);
 
 // ── Column allowlist per table (prevents arbitrary column injection) ───────────
@@ -49,7 +55,6 @@ const TABLE_COLUMNS: Record<string, string[]> = {
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
-    connections: ["status", "message", "approved_at"],
 };
 
 
@@ -98,7 +103,6 @@ function pickColumns(table: string, data: Record<string, unknown>): Record<strin
 /** Get the ownership column for a table (if any) */
 function ownerColumn(table: string): string | null {
     if (["profiles", "sites", "ai_preferences", "api_connections"].includes(table)) return "user_id";
-    if (table === "connections") return "owner_id";
     return null;
 }
 
@@ -194,7 +198,7 @@ router.get("/:table", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ── INSERT ─────────────────────────────────────────────────────────────────────
-router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
+router.post("/:table", requireAuth, requireRole("owner", "admin"), async (req: AuthRequest, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 
@@ -253,7 +257,7 @@ router.post("/:table", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ── UPDATE ─────────────────────────────────────────────────────────────────────
-router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/:table", requireAuth, requireRole("owner", "admin"), async (req: AuthRequest, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 
@@ -298,7 +302,7 @@ router.patch("/:table", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ── DELETE ─────────────────────────────────────────────────────────────────────
-router.delete("/:table", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/:table", requireAuth, requireRole("owner", "admin"), async (req: AuthRequest, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 
@@ -328,7 +332,7 @@ router.delete("/:table", requireAuth, async (req: AuthRequest, res) => {
 });
 
 // ── UPSERT ─────────────────────────────────────────────────────────────────────
-router.post("/:table/upsert", requireAuth, async (req: AuthRequest, res) => {
+router.post("/:table/upsert", requireAuth, requireRole("owner", "admin"), async (req: AuthRequest, res) => {
     const { table } = req.params;
     if (!validateTable(table, res)) return;
 

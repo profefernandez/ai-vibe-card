@@ -12,6 +12,7 @@ import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
+import { assertPublicHost, SafeFetchError } from "../../lib/safe-fetch.js";
 import { logger } from "../../logger.js";
 
 type Block = {
@@ -79,11 +80,23 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         res.status(400).json({ success: false, error: "Only http/https URLs are allowed" });
         return;
     }
-    // Block private/internal IPs
-    const hostname = parsedUrl.hostname;
-    const privatePatterns = /^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|0\.|169\.254\.|::1|localhost|fc00|fd00|fe80)/i;
-    if (privatePatterns.test(hostname)) {
-        res.status(400).json({ success: false, error: "Internal/private addresses are not allowed" });
+    // Defense in depth: resolve the hostname and reject if it lands on a
+    // private/loopback/link-local/CGNAT/cloud-metadata range. The previous
+    // regex-only check passed any hostname that didn't *literally start with*
+    // a private octet — so e.g. `attacker.com` resolving to 127.0.0.1 slipped
+    // through. Firecrawl actually performs the crawl from their infra, so
+    // the live SSRF surface lives in their network, but accepting an obviously
+    // private hostname here would still let a user weaponize the verified-
+    // domain check for internal recon. (verify-domain.ts also uses safeFetch,
+    // which prevents verification of a private hostname in the first place —
+    // this is the second layer.)
+    try {
+        await assertPublicHost(parsedUrl.hostname);
+    } catch (err) {
+        const message = err instanceof SafeFetchError && err.reason === "private_address"
+            ? "Internal/private addresses are not allowed"
+            : "Could not resolve domain";
+        res.status(400).json({ success: false, error: message });
         return;
     }
 
