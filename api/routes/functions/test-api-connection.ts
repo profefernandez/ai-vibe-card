@@ -10,7 +10,6 @@
 
 import type { Response } from "express";
 import type { AuthRequest } from "../../middleware/auth.js";
-import { db } from "../../db.js";
 import { decrypt, isEncrypted } from "../../lib/crypto.js";
 import { logAudit } from "../../lib/audit.js";
 import { logger } from "../../logger.js";
@@ -25,10 +24,10 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
 
     try {
         // Look up the stored API key for this user + provider
-        const { rows } = await db.query(
+        const rows = await req.withClient!(async (c) => (await c.query(
             `SELECT id, api_key_encrypted FROM api_connections WHERE user_id = $1 AND provider = $2`,
             [req.user!.id, provider],
-        );
+        )).rows);
         const raw = rows[0]?.api_key_encrypted;
         if (!raw) {
             res.status(404).json({ success: false, error: "No API key stored for this provider" });

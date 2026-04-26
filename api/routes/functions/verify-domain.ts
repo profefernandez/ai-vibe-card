@@ -11,7 +11,6 @@
 
 import { promises as dns } from "node:dns";
 import type { Response } from "express";
-import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
 import { safeFetch, SafeFetchError } from "../../lib/safe-fetch.js";
@@ -42,11 +41,11 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
     }
 
     // Fetch the site — must belong to user and have a token
-    const { rows } = await db.query(
+    const rows = await req.withClient!(async (c) => (await c.query(
         `SELECT id, domain, verification_token, verification_expires_at, verified
          FROM sites WHERE id = $1 AND user_id = $2`,
         [site_id, user.id],
-    );
+    )).rows);
     if (!rows.length) {
         res.status(403).json({ success: false, error: "Forbidden" });
         return;
@@ -90,11 +89,11 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
     const verified = detail === "verified";
 
     if (verified) {
-        await db.query(
+        await req.withClient!((c) => c.query(
             `UPDATE sites SET verified = TRUE, verification_method = $1, verified_at = NOW(), updated_at = NOW()
              WHERE id = $2`,
             [method, site_id],
-        );
+        ));
     }
 
     logAudit({

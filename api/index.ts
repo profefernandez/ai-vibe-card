@@ -29,14 +29,13 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { logger } from "./logger.js";
 import { verifyJwtWithRotation } from "./middleware/auth.js";
-import { attachDbHelper } from "./db.js";
+import { attachDbHelper, db, serviceDb } from "./db.js";
 import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
 import { router as uploadRouter } from "./routes/upload.js";
 import { router as cardRouter } from "./routes/card.js";
 import { router as feedbackRouter } from "./routes/feedback.js";
-import { db } from "./db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -253,6 +252,10 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 // Readiness: dependencies reachable. Used by Docker healthcheck and load balancers.
 app.get("/api/ready", async (_req, res) => {
     try {
+        // Healthcheck on the regular pool — service pool reuses the same
+        // backing process when DATABASE_URL_SERVICE is unset, so checking
+        // db is sufficient and avoids hitting the BYPASSRLS path on every
+        // ping.
         await db.query("SELECT 1");
         res.json({ ok: true });
     } catch (err) {
@@ -280,10 +283,12 @@ app.use("/api/card", cardRouter);
 app.use("/api/connections", cardRouter);
 app.use("/api/feedback", feedbackRouter);
 
-// Dynamic robots.txt — renders structured JSON into standard robots.txt format
+// Dynamic robots.txt — renders structured JSON into standard robots.txt format.
+// Public, unauthenticated endpoint: uses serviceDb so RLS (once enabled)
+// doesn't filter the lookup to zero rows.
 app.get("/robots.txt", async (_req, res) => {
     try {
-        const { rows } = await db.query(`SELECT robots_txt FROM profiles LIMIT 1`);
+        const { rows } = await serviceDb.query(`SELECT robots_txt FROM profiles LIMIT 1`);
         const directives = rows[0]?.robots_txt ?? [{ userAgent: "*", rules: [{ action: "allow", path: "/" }] }];
         const lines: string[] = [];
         for (const group of directives) {
@@ -342,11 +347,11 @@ function shutdown(signal: string): void {
     server.close(async (err) => {
         if (err) logger.error({ err }, "error closing HTTP server");
         try {
-            await db.end();
-            logger.info("db pool closed; exiting cleanly");
+            await Promise.all([db.end(), serviceDb.end()]);
+            logger.info("db pools closed; exiting cleanly");
             process.exit(0);
         } catch (closeErr) {
-            logger.error({ err: closeErr }, "error closing db pool");
+            logger.error({ err: closeErr }, "error closing db pools");
             process.exit(1);
         }
     });

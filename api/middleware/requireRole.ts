@@ -18,7 +18,6 @@
  */
 
 import type { Response, NextFunction } from "express";
-import { db } from "../db.js";
 import { logger } from "../logger.js";
 import type { AuthRequest } from "./auth.js";
 
@@ -43,14 +42,21 @@ export function requireRole(...allowed: Role[]) {
         let role = req.user.role;
 
         // Fallback for legacy JWTs minted before the `role` claim was added.
+        // Uses req.withClient so the lookup runs inside an RLS-aware
+        // transaction. The future memberships policy (`USING (user_id =
+        // current_setting('app.user_id'))`) will still return the correct
+        // row because we're looking up the caller's own membership.
         if (!role) {
             try {
-                const { rows } = await db.query(
-                    `SELECT role FROM memberships
-                     WHERE user_id = $1 AND organization_id = $2
-                     LIMIT 1`,
-                    [req.user.id, req.user.organizationId],
-                );
+                const rows = await req.withClient!(async (c) => {
+                    const r = await c.query(
+                        `SELECT role FROM memberships
+                         WHERE user_id = $1 AND organization_id = $2
+                         LIMIT 1`,
+                        [req.user!.id, req.user!.organizationId],
+                    );
+                    return r.rows;
+                });
                 role = (rows[0]?.role as Role | undefined) ?? undefined;
                 if (role) req.user.role = role;
             } catch (err) {

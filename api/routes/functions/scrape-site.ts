@@ -8,7 +8,6 @@
  */
 
 import type { Response } from "express";
-import { db } from "../../db.js";
 import { type AuthRequest } from "../../middleware/auth.js";
 import { logAudit } from "../../lib/audit.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
@@ -106,21 +105,32 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         return;
     }
 
-    // Verify the site belongs to the requesting user
-    const siteCheck = await db.query("SELECT id, verified FROM sites WHERE id = $1 AND user_id = $2", [
-        site_id,
-        user.id,
-    ]);
-    if (!siteCheck.rows.length) {
-        res.status(403).json({ success: false, error: "Forbidden" });
-        return;
-    }
-    if (!siteCheck.rows[0].verified) {
-        res.status(403).json({ success: false, error: "Domain must be verified before scraping" });
-        return;
-    }
+    // Verify the site belongs to the requesting user, AND atomically mark it
+    // as scraping in the same transaction (single RLS context, no TOCTOU
+    // between ownership check and the status mark).
+    const siteCheck = await req.withClient!(async (c) => {
+        const result = await c.query(
+            "SELECT id, verified FROM sites WHERE id = $1 AND user_id = $2",
+            [site_id, user.id],
+        );
+        if (!result.rows.length) {
+            return { ok: false as const, reason: "forbidden" as const };
+        }
+        if (!result.rows[0].verified) {
+            return { ok: false as const, reason: "unverified" as const };
+        }
+        await c.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site_id]);
+        return { ok: true as const };
+    });
 
-    await db.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site_id]);
+    if (!siteCheck.ok) {
+        if (siteCheck.reason === "forbidden") {
+            res.status(403).json({ success: false, error: "Forbidden" });
+        } else {
+            res.status(403).json({ success: false, error: "Domain must be verified before scraping" });
+        }
+        return;
+    }
 
     // Audit log — track scrape actions
     logAudit({
@@ -133,9 +143,13 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         meta: { domain: formattedUrl },
     });
 
-    // Clear old data so re-scrape is a clean replace
-    await db.query("DELETE FROM content_blocks WHERE site_id = $1", [site_id]);
-    await db.query("DELETE FROM site_pages WHERE site_id = $1", [site_id]);
+    // Clear old data so re-scrape is a clean replace — both deletes in one
+    // transaction so we never leave orphaned content_blocks if the second
+    // statement fails.
+    await req.withClient!(async (c) => {
+        await c.query("DELETE FROM content_blocks WHERE site_id = $1", [site_id]);
+        await c.query("DELETE FROM site_pages WHERE site_id = $1", [site_id]);
+    });
 
     try {
         const crawlResponse = await fetch("https://api.firecrawl.dev/v1/crawl", {
@@ -153,13 +167,17 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
 
         const crawlData = (await crawlResponse.json()) as any;
         if (!crawlResponse.ok) {
-            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            await req.withClient!((c) =>
+                c.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]),
+            );
             throw new Error(crawlData.error || "Crawl failed");
         }
 
         const jobId: string = crawlData.id;
         if (!jobId) {
-            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            await req.withClient!((c) =>
+                c.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]),
+            );
             throw new Error("No crawl job ID returned");
         }
 
@@ -175,13 +193,17 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
                 results = statusData.data;
                 break;
             } else if (statusData.status === "failed") {
-                await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+                await req.withClient!((c) =>
+                    c.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]),
+                );
                 throw new Error("Crawl job failed");
             }
         }
 
         if (!results?.length) {
-            await db.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]);
+            await req.withClient!((c) =>
+                c.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]),
+            );
             throw new Error("Crawl timed out or returned no results");
         }
 
@@ -191,36 +213,48 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
             const pageTitle: string = page.metadata?.title || "Untitled";
             const markdown: string = page.markdown || "";
             const html: string = page.html || "";
-
-            const pageResult = await db.query(
-                `INSERT INTO site_pages (site_id, url, title, markdown, html, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-                [site_id, pageUrl, pageTitle, markdown, html, JSON.stringify(page.metadata || {})],
-            );
-            const pageId: string = pageResult.rows[0].id;
-
             const blocks = parseMarkdownToBlocks(markdown);
-            for (let i = 0; i < blocks.length; i++) {
-                const b = blocks[i];
-                await db.query(
-                    `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [site_id, pageId, sanitizeContent(b.heading), sanitizeContent(b.body), b.images, b.category, i],
+
+            // One transaction per page: insert the page row + all its
+            // content_blocks atomically. If any block insert fails, the page
+            // row is rolled back too (no half-written page). The connection
+            // is released back to the pool between pages so the long
+            // Firecrawl crawl never holds a single connection open.
+            const writtenBlocks = await req.withClient!(async (c) => {
+                const pageResult = await c.query(
+                    `INSERT INTO site_pages (site_id, url, title, markdown, html, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                    [site_id, pageUrl, pageTitle, markdown, html, JSON.stringify(page.metadata || {})],
                 );
-                totalBlocks++;
-            }
+                const pageId: string = pageResult.rows[0].id;
+
+                for (let i = 0; i < blocks.length; i++) {
+                    const b = blocks[i];
+                    await c.query(
+                        `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                        [site_id, pageId, sanitizeContent(b.heading), sanitizeContent(b.body), b.images, b.category, i],
+                    );
+                }
+                return blocks.length;
+            });
+            totalBlocks += writtenBlocks;
         }
 
-        await db.query(
-            "UPDATE sites SET scrape_status = 'completed', page_count = $1, last_scraped_at = NOW(), updated_at = NOW() WHERE id = $2",
-            [results.length, site_id],
+        await req.withClient!((c) =>
+            c.query(
+                "UPDATE sites SET scrape_status = 'completed', page_count = $1, last_scraped_at = NOW(), updated_at = NOW() WHERE id = $2",
+                [results.length, site_id],
+            ),
         );
 
         res.json({ success: true, pages: results.length, blocks: totalBlocks });
     } catch (err) {
         logger.error({ err }, "scrape-site error");
-        await db
-            .query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id])
+        await req
+            .withClient!((c) =>
+                c.query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site_id]),
+            )
             .catch(() => { });
         res.status(500).json({
             success: false,

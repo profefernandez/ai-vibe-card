@@ -8,7 +8,11 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { createHash } from "node:crypto";
-import { db } from "../db.js";
+// Session lookup runs before req.user is established — this is the
+// identity-resolution step. It must bypass RLS or the policy on `sessions`
+// (visible only to its own user) would prevent us from finding the session
+// in the first place. Use serviceDb.
+import { serviceDb } from "../db.js";
 
 export interface AuthRequest extends Request {
     user?: {
@@ -83,7 +87,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
     }
 
     const tokenHash = hashToken(token);
-    db.query(
+    serviceDb.query(
         "SELECT id FROM sessions WHERE token_hash = $1 AND expires_at > NOW()",
         [tokenHash],
     ).then(({ rows }) => {

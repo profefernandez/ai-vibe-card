@@ -9,7 +9,6 @@
  */
 
 import type { Response } from "express";
-import { db } from "../../db.js";
 import type { AuthRequest } from "../../middleware/auth.js";
 import { sanitiseInput } from "../../lib/sanitise.js";
 import { logAudit } from "../../lib/audit.js";
@@ -35,24 +34,29 @@ export async function handler(req: AuthRequest, res: Response): Promise<void> {
         }
         const cleanQuery = sanitised.text;
 
-        // Verify the authenticated user owns this site
-        const { rows: siteRows } = await db.query(
-            "SELECT id FROM sites WHERE id = $1 AND user_id = $2",
-            [site_id, req.user!.id],
-        );
-        if (siteRows.length === 0) {
+        // Verify the authenticated user owns this site, then fetch content
+        // blocks — grouped in one transaction so both queries share RLS context.
+        const blocks = await req.withClient!(async (c) => {
+            const { rows: siteRows } = await c.query(
+                "SELECT id FROM sites WHERE id = $1 AND user_id = $2",
+                [site_id, req.user!.id],
+            );
+            if (siteRows.length === 0) {
+                return null;
+            }
+            const { rows } = await c.query(
+                `SELECT id, heading, body, images, category, tags, block_order, page_id
+                 FROM content_blocks
+                 WHERE site_id = $1 AND visibility = 'public'
+                 ORDER BY block_order LIMIT 200`,
+                [site_id],
+            );
+            return rows;
+        });
+        if (blocks === null) {
             res.status(403).json({ success: false, error: "Site not found or access denied" });
             return;
         }
-
-        // Fetch content blocks scoped to the requested site (public only)
-        const { rows: blocks } = await db.query(
-            `SELECT id, heading, body, images, category, tags, block_order, page_id
-             FROM content_blocks
-             WHERE site_id = $1 AND visibility = 'public'
-             ORDER BY block_order LIMIT 200`,
-            [site_id],
-        );
 
         if (!blocks.length) {
             res.json({ success: true, blocks: [], message: "No content available yet" });

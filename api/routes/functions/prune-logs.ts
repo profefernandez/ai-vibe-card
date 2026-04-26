@@ -21,7 +21,7 @@
 
 import type { Request, Response } from "express";
 import { timingSafeEqual } from "node:crypto";
-import { db } from "../../db.js";
+import { serviceDb } from "../../db.js";
 import { logger } from "../../logger.js";
 import { logAudit } from "../../lib/audit.js";
 
@@ -60,7 +60,7 @@ const TARGETS: PruneTarget[] = [
 ];
 
 async function pruneTable(target: PruneTarget): Promise<number> {
-    const client = await db.connect();
+    const client = await serviceDb.connect();
     let total = 0;
     try {
         await client.query("BEGIN");

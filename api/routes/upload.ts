@@ -11,7 +11,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
-import { db } from "../db.js";
 import { logger } from "../logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -91,9 +90,11 @@ router.post(
             }
 
             // Update the profile row
-            await db.query(
-                `UPDATE profiles SET avatar_url = $1, updated_at = NOW() WHERE user_id = $2`,
-                [avatarUrl, userId]
+            await req.withClient!((c) =>
+                c.query(
+                    `UPDATE profiles SET avatar_url = $1, updated_at = NOW() WHERE user_id = $2`,
+                    [avatarUrl, userId]
+                )
             );
 
             res.json({ url: avatarUrl });
@@ -121,9 +122,11 @@ router.delete("/avatar", requireAuth, async (req: AuthRequest, res) => {
         }
 
         // Clear the avatar URL in the DB
-        await db.query(
-            `UPDATE profiles SET avatar_url = '', updated_at = NOW() WHERE user_id = $1`,
-            [userId]
+        await req.withClient!((c) =>
+            c.query(
+                `UPDATE profiles SET avatar_url = '', updated_at = NOW() WHERE user_id = $1`,
+                [userId]
+            )
         );
 
         res.json({ ok: true });

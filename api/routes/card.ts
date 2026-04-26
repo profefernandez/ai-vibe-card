@@ -12,7 +12,7 @@
  */
 
 import { Router } from "express";
-import { db } from "../db.js";
+import { serviceDb } from "../db.js";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { sendEmail, connectionRequestEmail, connectionApprovedEmail } from "../lib/email.js";
 import { logAudit } from "../lib/audit.js";
@@ -31,7 +31,7 @@ router.get("/:slug", async (req, res) => {
     }
 
     try {
-        const { rows } = await db.query(
+        const { rows } = await serviceDb.query(
             `SELECT p.display_name, p.tagline, p.bio, p.avatar_url,
                     p.cta_url, p.cta_label, p.cta_embed, p.social_links, p.card_layout,
                     p.theme, p.accent_color, p.slug, p.ai_query_enabled
@@ -69,7 +69,7 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
 
     try {
         // Find the card owner by slug
-        const { rows: profiles } = await db.query(
+        const { rows: profiles } = await serviceDb.query(
             `SELECT p.user_id FROM profiles p WHERE LOWER(p.slug) = LOWER($1)`,
             [slug],
         );
@@ -86,7 +86,7 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
         }
 
         // Check for existing connection (either direction)
-        const { rows: existing } = await db.query(
+        const { rows: existing } = await serviceDb.query(
             `SELECT id, status FROM connections
              WHERE (requester_id = $1 AND owner_id = $2)
                 OR (requester_id = $2 AND owner_id = $1)`,
@@ -101,7 +101,7 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
                 res.status(409).json({ error: "Connection request already pending" });
             } else {
                 // Declined — allow re-request by updating existing row
-                await db.query(
+                await serviceDb.query(
                     `UPDATE connections SET status = 'pending', message = $1, updated_at = NOW()
                      WHERE id = $2`,
                     [safeMessage, conn.id],
@@ -112,15 +112,15 @@ router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
         }
 
         // Create new connection request
-        const { rows: newConn } = await db.query(
+        const { rows: newConn } = await serviceDb.query(
             `INSERT INTO connections (requester_id, owner_id, message)
              VALUES ($1, $2, $3) RETURNING id, status`,
             [requesterId, ownerId, safeMessage],
         );
 
         // Send email notification (non-blocking)
-        const { rows: ownerUser } = await db.query(`SELECT email FROM users WHERE id = $1`, [ownerId]);
-        const { rows: requesterProfile } = await db.query(
+        const { rows: ownerUser } = await serviceDb.query(`SELECT email FROM users WHERE id = $1`, [ownerId]);
+        const { rows: requesterProfile } = await serviceDb.query(
             `SELECT display_name FROM profiles WHERE user_id = $1`,
             [requesterId],
         );
@@ -144,7 +144,7 @@ router.get("/", requireAuth, async (req: AuthRequest, res) => {
     const userId = req.user!.id;
     try {
         // Get connections where user is owner or requester, join with profiles
-        const { rows } = await db.query(
+        const { rows } = await serviceDb.query(
             `SELECT c.id, c.requester_id, c.owner_id, c.status, c.message,
                     c.created_at, c.updated_at, c.approved_at,
                     p.display_name, p.avatar_url, p.tagline, p.slug,
@@ -180,7 +180,7 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     try {
         // Only the owner (recipient) can approve/decline
-        const { rows } = await db.query(
+        const { rows } = await serviceDb.query(
             `UPDATE connections
              SET status = $1,
                  approved_at = CASE WHEN $1 = 'approved' THEN NOW() ELSE approved_at END,
@@ -197,11 +197,11 @@ router.patch("/:id", requireAuth, async (req: AuthRequest, res) => {
 
         // Send approval email (non-blocking)
         if (status === "approved") {
-            const { rows: requesterUser } = await db.query(
+            const { rows: requesterUser } = await serviceDb.query(
                 `SELECT email FROM users WHERE id = $1`,
                 [rows[0].requester_id],
             );
-            const { rows: ownerProfile } = await db.query(
+            const { rows: ownerProfile } = await serviceDb.query(
                 `SELECT display_name FROM profiles WHERE user_id = $1`,
                 [userId],
             );
@@ -228,7 +228,7 @@ router.delete("/:id", requireAuth, async (req: AuthRequest, res) => {
 
     try {
         // Either party can remove a connection
-        const { rowCount } = await db.query(
+        const { rowCount } = await serviceDb.query(
             `DELETE FROM connections WHERE id = $1 AND (owner_id = $2 OR requester_id = $2)`,
             [id, userId],
         );
@@ -271,7 +271,7 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
 
     try {
         // Verify the connection exists, is approved, and user is a party
-        const { rows: connRows } = await db.query(
+        const { rows: connRows } = await serviceDb.query(
             `SELECT c.requester_id, c.owner_id
              FROM connections c
              WHERE c.id = $1 AND c.status = 'approved'
@@ -289,7 +289,7 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
         const targetUserId = conn.owner_id === userId ? conn.requester_id : conn.owner_id;
 
         // Check that the target has ai_query_enabled
-        const { rows: targetProfile } = await db.query(
+        const { rows: targetProfile } = await serviceDb.query(
             `SELECT display_name, ai_query_enabled FROM profiles WHERE user_id = $1`,
             [targetUserId],
         );
@@ -299,7 +299,7 @@ router.post("/:id/query", requireAuth, async (req: AuthRequest, res) => {
         }
 
         // Fetch the target user's public content blocks (from their verified sites)
-        const { rows: blocks } = await db.query(
+        const { rows: blocks } = await serviceDb.query(
             `SELECT cb.heading, cb.body
              FROM content_blocks cb
              JOIN sites s ON s.id = cb.site_id

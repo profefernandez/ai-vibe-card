@@ -20,7 +20,7 @@
  */
 
 import { Router } from "express";
-import { db } from "../db.js";
+import type { PoolClient } from "pg";
 import { requireAuth, type AuthRequest } from "../middleware/auth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { encrypt } from "../lib/crypto.js";
@@ -124,11 +124,11 @@ function addSiteOwnership(table: string, userId: string, clauses: string[], valu
 }
 
 /** Verify all site_ids in rows belong to the authenticated user */
-async function verifySiteOwnership(table: string, rows: Record<string, unknown>[], userId: string): Promise<boolean> {
+async function verifySiteOwnership(client: PoolClient, table: string, rows: Record<string, unknown>[], userId: string): Promise<boolean> {
     if (!SITE_OWNED_TABLES.has(table)) return true;
     const siteIds = [...new Set(rows.map((r) => r.site_id).filter(Boolean))];
     if (siteIds.length === 0) return false;
-    const { rows: owned } = await db.query(
+    const { rows: owned } = await client.query(
         `SELECT id FROM sites WHERE id = ANY($1) AND user_id = $2`,
         [siteIds, userId],
     );
@@ -181,16 +181,16 @@ router.get("/:table", requireAuth, async (req: AuthRequest, res) => {
     }
 
     try {
-        const result = await db.query(sql, values);
+        const rows = await req.withClient!((c) => c.query(sql, values).then((r) => r.rows));
         // Strip raw API keys from api_connections responses
         if (table === "api_connections") {
-            for (const row of result.rows) {
+            for (const row of rows) {
                 if (row.api_key_encrypted) {
                     row.api_key_encrypted = "••••••••";
                 }
             }
         }
-        res.json(result.rows);
+        res.json(rows);
     } catch (err) {
         logger.error({ err }, "SELECT error");
         res.status(500).json({ error: "Query failed" });
@@ -207,15 +207,6 @@ router.post("/:table", requireAuth, requireRole("owner", "admin"), async (req: A
 
     // Force ownership column to authenticated user
     const ownCol = ownerColumn(table);
-
-    // Verify site ownership for site_pages/content_blocks
-    if (SITE_OWNED_TABLES.has(table)) {
-        const valid = await verifySiteOwnership(table, rows, req.user!.id);
-        if (!valid) {
-            res.status(403).json({ error: "Access denied: site_id does not belong to you" });
-            return;
-        }
-    }
 
     const cleaned = rows.map((r) => {
         const c = pickColumns(table, r);
@@ -248,13 +239,30 @@ router.post("/:table", requireAuth, requireRole("owner", "admin"), async (req: A
     const sql = `INSERT INTO "${table}" (${colList}) VALUES ${valPlaceholders} RETURNING *`;
 
     try {
-        const result = await db.query(sql, flatValues);
-        res.status(201).json(result.rows.length === 1 ? result.rows[0] : result.rows);
+        const inserted = await req.withClient!(async (c) => {
+            // Verify site ownership for site_pages/content_blocks INSIDE the
+            // same transaction as the INSERT — both queries see the same
+            // RLS context, and a TOCTOU between check and write can't slip in.
+            if (SITE_OWNED_TABLES.has(table)) {
+                const valid = await verifySiteOwnership(c, table, rows, req.user!.id);
+                if (!valid) {
+                    throw new SiteOwnershipError();
+                }
+            }
+            return (await c.query(sql, flatValues)).rows;
+        });
+        res.status(201).json(inserted.length === 1 ? inserted[0] : inserted);
     } catch (err) {
+        if (err instanceof SiteOwnershipError) {
+            res.status(403).json({ error: "Access denied: site_id does not belong to you" });
+            return;
+        }
         logger.error({ err }, "INSERT error");
         res.status(500).json({ error: "Insert failed" });
     }
 });
+
+class SiteOwnershipError extends Error {}
 
 // ── UPDATE ─────────────────────────────────────────────────────────────────────
 router.patch("/:table", requireAuth, requireRole("owner", "admin"), async (req: AuthRequest, res) => {
@@ -293,7 +301,7 @@ router.patch("/:table", requireAuth, requireRole("owner", "admin"), async (req: 
 
     const sql = `UPDATE "${table}" SET ${setClauses.join(", ")} WHERE ${clauses.join(" AND ")}`;
     try {
-        await db.query(sql, values);
+        await req.withClient!((c) => c.query(sql, values));
         res.json({ ok: true });
     } catch (err) {
         logger.error({ err }, "UPDATE error");
@@ -323,7 +331,7 @@ router.delete("/:table", requireAuth, requireRole("owner", "admin"), async (req:
 
     const sql = `DELETE FROM "${table}" WHERE ${clauses.join(" AND ")}`;
     try {
-        await db.query(sql, values);
+        await req.withClient!((c) => c.query(sql, values));
         res.json({ ok: true });
     } catch (err) {
         logger.error({ err }, "DELETE error");
@@ -380,8 +388,8 @@ router.post("/:table/upsert", requireAuth, requireRole("owner", "admin"), async 
   `;
 
     try {
-        const result = await db.query(sql, flatValues);
-        res.json(result.rows[0] ?? null);
+        const upserted = await req.withClient!(async (c) => (await c.query(sql, flatValues)).rows);
+        res.json(upserted[0] ?? null);
     } catch (err) {
         logger.error({ err }, "UPSERT error");
         res.status(500).json({ error: "Upsert failed" });

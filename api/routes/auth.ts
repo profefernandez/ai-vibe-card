@@ -10,7 +10,13 @@ import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { randomBytes } from "node:crypto";
-import { db } from "../db.js";
+// Auth routes are identity-establishing: login and register run BEFORE
+// req.user exists, so they can't use req.withClient. Logout / revoke
+// sessions run after auth but operate on `sessions` and `users` rows that
+// the user owns by definition — using serviceDb keeps the call sites
+// uniform and avoids policy edge cases for tables that the user is the
+// primary subject of.
+import { serviceDb } from "../db.js";
 import { requireAuth, hashToken, type AuthRequest } from "../middleware/auth.js";
 import { logAudit } from "../lib/audit.js";
 import { logger } from "../logger.js";
@@ -43,7 +49,7 @@ router.post("/register", async (req, res) => {
         return;
     }
 
-    const client = await db.connect();
+    const client = await serviceDb.connect();
     try {
         const existing = await client.query("SELECT id FROM users WHERE email = $1", [email]);
         if (existing.rows.length > 0) {
@@ -97,7 +103,7 @@ router.post("/register", async (req, res) => {
         );
         const tokenHash = hashToken(token);
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        await db.query(
+        await serviceDb.query(
             `INSERT INTO sessions (user_id, token_hash, user_agent, ip_address, expires_at)
              VALUES ($1, $2, $3, $4::inet, $5)`,
             [user.id, tokenHash, req.get("user-agent") || null, req.ip || null, expiresAt.toISOString()],
@@ -124,7 +130,7 @@ router.post("/login", async (req, res) => {
     }
 
     try {
-        const result = await db.query(
+        const result = await serviceDb.query(
             `SELECT u.id, u.email, u.password_hash, u.locked_until, u.failed_login_count,
                     m.organization_id, m.role
              FROM users u
@@ -178,7 +184,7 @@ router.post("/login", async (req, res) => {
             // Increment counter and lock if threshold reached. Done in one
             // statement so concurrent attempts can't race past the cap.
             if (user) {
-                await db.query(
+                await serviceDb.query(
                     `UPDATE users
                      SET failed_login_count = failed_login_count + 1,
                          locked_until = CASE
@@ -208,14 +214,14 @@ router.post("/login", async (req, res) => {
 
         // Successful login — clear the failure counter and any expired lock.
         if (user.failed_login_count > 0 || user.locked_until) {
-            await db.query(
+            await serviceDb.query(
                 `UPDATE users SET failed_login_count = 0, locked_until = NULL,
                                   last_sign_in_at = NOW()
                  WHERE id = $1`,
                 [user.id],
             );
         } else {
-            await db.query("UPDATE users SET last_sign_in_at = NOW() WHERE id = $1", [user.id]);
+            await serviceDb.query("UPDATE users SET last_sign_in_at = NOW() WHERE id = $1", [user.id]);
         }
 
         const token = jwt.sign(
@@ -235,7 +241,7 @@ router.post("/login", async (req, res) => {
         // Store session for revocation support
         const tokenHash = hashToken(token);
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        await db.query(
+        await serviceDb.query(
             `INSERT INTO sessions (user_id, token_hash, user_agent, ip_address, expires_at)
              VALUES ($1, $2, $3, $4::inet, $5)`,
             [user.id, tokenHash, req.get("user-agent") || null, req.ip || null, expiresAt.toISOString()],
@@ -256,7 +262,7 @@ router.post("/logout", requireAuth, async (req: AuthRequest, res) => {
     try {
         const token = req.headers.authorization!.slice(7);
         const tokenHash = hashToken(token);
-        await db.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
+        await serviceDb.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
         logAudit({ userId: req.user!.id, action: "logout", ip: req.ip, userAgent: req.get("user-agent") });
         res.json({ ok: true });
     } catch (err) {
@@ -268,7 +274,7 @@ router.post("/logout", requireAuth, async (req: AuthRequest, res) => {
 // ── Revoke all sessions ──────────────────────────────────────────────────────
 router.delete("/sessions", requireAuth, async (req: AuthRequest, res) => {
     try {
-        await db.query("DELETE FROM sessions WHERE user_id = $1", [req.user!.id]);
+        await serviceDb.query("DELETE FROM sessions WHERE user_id = $1", [req.user!.id]);
         logAudit({ userId: req.user!.id, action: "revoke_all_sessions", ip: req.ip, userAgent: req.get("user-agent") });
         res.json({ ok: true, message: "All sessions revoked" });
     } catch (err) {

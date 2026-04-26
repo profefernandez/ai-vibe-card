@@ -19,7 +19,7 @@
  */
 
 import type { Request, Response } from "express";
-import { db } from "../../db.js";
+import { serviceDb } from "../../db.js";
 import { logger } from "../../logger.js";
 import { decrypt, isEncrypted } from "../../lib/crypto.js";
 import { sanitiseInput, filterOutput } from "../../lib/sanitise.js";
@@ -173,7 +173,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         //     planner's choice could change between releases, making the
         //     active provider effectively undefined. (Long-term: an explicit
         //     `default_provider` column on profiles will replace this.)
-        const { rows: connRows } = await db.query(
+        const { rows: connRows } = await serviceDb.query(
             `SELECT ac.id, ac.provider, ac.api_key_encrypted, ac.model_name, s.user_id AS site_owner_id
              FROM api_connections ac
              JOIN sites s ON s.organization_id = ac.organization_id
@@ -187,7 +187,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         // binding even on the platform-default path (no api_connections row).
         let siteOwnerId: string | null = connRows[0]?.site_owner_id ?? null;
         if (!siteOwnerId) {
-            const { rows: ownerRows } = await db.query(
+            const { rows: ownerRows } = await serviceDb.query(
                 `SELECT user_id FROM sites WHERE id = $1 LIMIT 1`,
                 [site_id],
             );
@@ -237,7 +237,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
         // ── Fetch site content for context ────────────────────────────────
         let siteContext = "";
         try {
-            const { rows: blocks } = await db.query(
+            const { rows: blocks } = await serviceDb.query(
                 `SELECT heading, body FROM content_blocks
                  WHERE site_id = $1 AND visibility = 'public'
                  ORDER BY block_order LIMIT 30`,
@@ -273,7 +273,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                              JOIN sites s ON s.user_id = ap.user_id
                              WHERE s.id = $1
                              LIMIT 1`;
-            const { rows: prefs } = await db.query(prefQuery, [site_id]);
+            const { rows: prefs } = await serviceDb.query(prefQuery, [site_id]);
             const pref = prefs[0];
             const customRules: string[] = Array.isArray(pref?.prompt_injection_rules) ? pref.prompt_injection_rules : [];
             const allRules = [...BASELINE_INJECTION_RULES, ...customRules];

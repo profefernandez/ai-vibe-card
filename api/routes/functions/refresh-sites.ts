@@ -11,7 +11,7 @@
  */
 
 import type { Request, Response } from "express";
-import { db } from "../../db.js";
+import { serviceDb } from "../../db.js";
 import { handler as scrapeSiteHandler } from "./scrape-site.js";
 import { logger } from "../../logger.js";
 import { sanitizeContent } from "../../lib/sanitize-content.js";
@@ -41,7 +41,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
 
         // Find sites that are stale: never scraped or last_scraped_at older than refresh_interval_hours
         // Only refresh verified sites
-        const { rows: staleSites } = await db.query(`
+        const { rows: staleSites } = await serviceDb.query(`
             SELECT id, domain, user_id, verification_token, verification_method
             FROM sites
             WHERE verified = TRUE
@@ -66,7 +66,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                 // Re-verify domain ownership before refreshing
                 const stillVerified = await reVerifyDomain(site.domain, site.verification_token, site.verification_method);
                 if (!stillVerified) {
-                    await db.query(
+                    await serviceDb.query(
                         "UPDATE sites SET verified = FALSE, updated_at = NOW() WHERE id = $1",
                         [site.id],
                     );
@@ -77,9 +77,9 @@ export async function handler(req: Request, res: Response): Promise<void> {
                 // Build a fake request with the site owner's JWT-like context
                 // We call the DB directly instead of going through the HTTP handler
                 // to avoid needing per-user JWTs.
-                await db.query("DELETE FROM content_blocks WHERE site_id = $1", [site.id]);
-                await db.query("DELETE FROM site_pages WHERE site_id = $1", [site.id]);
-                await db.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site.id]);
+                await serviceDb.query("DELETE FROM content_blocks WHERE site_id = $1", [site.id]);
+                await serviceDb.query("DELETE FROM site_pages WHERE site_id = $1", [site.id]);
+                await serviceDb.query("UPDATE sites SET scrape_status = 'scraping' WHERE id = $1", [site.id]);
 
                 const apiKey = process.env.FIRECRAWL_API_KEY;
                 if (!apiKey) throw new Error("FIRECRAWL_API_KEY not set");
@@ -149,7 +149,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                     const markdown: string = page.markdown || "";
                     const html: string = page.html || "";
 
-                    const pageResult = await db.query(
+                    const pageResult = await serviceDb.query(
                         `INSERT INTO site_pages (site_id, url, title, markdown, html, metadata)
                          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
                         [site.id, pageUrl, pageTitle, markdown, html, JSON.stringify(page.metadata || {})],
@@ -159,7 +159,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                     const blocks = parseMarkdownToBlocks(markdown);
                     for (let j = 0; j < blocks.length; j++) {
                         const b = blocks[j];
-                        await db.query(
+                        await serviceDb.query(
                             `INSERT INTO content_blocks (site_id, page_id, heading, body, images, category, block_order)
                              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                             [site.id, pageId, sanitizeContent(b.heading), sanitizeContent(b.body), b.images, b.category, j],
@@ -168,7 +168,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                     }
                 }
 
-                await db.query(
+                await serviceDb.query(
                     "UPDATE sites SET scrape_status = 'completed', page_count = $1, last_scraped_at = NOW(), updated_at = NOW() WHERE id = $2",
                     [crawlResults.length, site.id],
                 );
@@ -176,7 +176,7 @@ export async function handler(req: Request, res: Response): Promise<void> {
                 results.push({ id: site.id, domain: site.domain, status: "refreshed" });
             } catch (err) {
                 logger.error({ err, domain: site.domain }, "refresh-sites: scrape failed");
-                await db
+                await serviceDb
                     .query("UPDATE sites SET scrape_status = 'error' WHERE id = $1", [site.id])
                     .catch(() => { });
                 results.push({

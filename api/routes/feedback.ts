@@ -21,7 +21,7 @@
 
 import { Router } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db } from "../db.js";
+import { serviceDb } from "../db.js";
 import { logger } from "../logger.js";
 import { verifyFeedbackToken } from "../lib/feedback-token.js";
 
@@ -143,7 +143,7 @@ router.post("/", feedbackLimiter, async (req, res) => {
     const userAgentRaw = req.headers["user-agent"];
     const userAgent = typeof userAgentRaw === "string" ? userAgentRaw.slice(0, 500) : null;
 
-    const client = await db.connect();
+    const client = await serviceDb.connect();
     try {
         await client.query("BEGIN");
 
