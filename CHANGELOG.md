@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/) and this 
 
 ## [Unreleased]
 
+<!-- Phase 6a additions -->
+### Added
+- **Phase 6a — RLS plumbing.** Foundation for Postgres row-level security; no policies enabled yet, no behavior change for any caller. New helper `withRequestClient(req, fn)` in `api/db.ts` runs a callback inside a single transaction with `SET LOCAL app.user_id` and `SET LOCAL app.org_id` populated from `req.user`. Express middleware `attachDbHelper` binds `req.withClient(fn)` so any authed handler can run an RLS-aware transaction in one line. New `serviceDb` pool reads from `DATABASE_URL_SERVICE` (falls back to `DATABASE_URL`) and is reserved for unauthenticated / cron paths that need to bypass RLS once policies turn on. Migration `1700000006000_service_role` creates the `aivibe_service` Postgres role with `BYPASSRLS NOLOGIN`; the operator sets a password and `ALTER ROLE … LOGIN` out of band before pointing `DATABASE_URL_SERVICE` at it. New 6-case smoke test under `api/scripts/test-with-request-client.ts` (verified end-to-end against a real Postgres: rejects unauthenticated calls, `SET LOCAL` visible inside the callback, doesn't leak past `COMMIT`, rolls back on throw). Subsequent sub-phases (Phase 6b call-site refactor, 6c policy creation, 6d–f staged enable) build on this.
+
 ### Security
 - `app.set('trust proxy', 1)` so the API uses the visitor's real IP (forwarded by the `web` nginx container) instead of the docker bridge address. Restores per-IP rate-limiter accuracy and fixes audit/session IP fields. Trust set to a single hop — narrower than `'uniquelocal'` so nothing else on the bridge can spoof `X-Forwarded-For`.
 - Removed `connections` from the generic `/api/tables` allowlist. The router treated `owner_id` as the sole ownership column, which left requesters unable to act on their own outgoing requests via this surface and created an asymmetric IDOR window. All connection ops continue to flow through `/api/connections` (`routes/card.ts`), which handles the requester/owner symmetry correctly.

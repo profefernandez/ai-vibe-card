@@ -29,6 +29,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { logger } from "./logger.js";
 import { verifyJwtWithRotation } from "./middleware/auth.js";
+import { attachDbHelper } from "./db.js";
 import { router as authRouter } from "./routes/auth.js";
 import { router as tablesRouter } from "./routes/tables.js";
 import { router as functionsRouter } from "./routes/functions/index.js";
@@ -121,6 +122,13 @@ app.use(
     }),
 );
 app.use(express.json({ limit: "2mb" }));
+
+// Phase 6 plumbing: bind req.withClient so any route handler can run a
+// transaction with RLS context (SET LOCAL app.user_id / app.org_id) without
+// each handler re-implementing the dance. Pre-RLS this is a no-op shape
+// change; once policies are enabled (Phase 6c+), every authed db query must
+// flow through this helper to be visible.
+app.use(attachDbHelper);
 
 // ── Security headers (helmet) ────────────────────────────────────────────────
 //
