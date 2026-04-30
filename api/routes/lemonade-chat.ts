@@ -30,34 +30,112 @@ const LEMONADE_CHAT_URL = "https://api.launchlemonade.app/v1/chat";
 
 // ── Security agent (app-provided) ────────────────────────────────────────────
 
-async function checkSecurityAgent(message: string): Promise<{ blocked: boolean; reason?: string }> {
+/**
+ * Block-detection rules. Two paths:
+ *   1. Structured leading token — "BLOCK" or "UNSAFE" at the start of the
+ *      response means the security agent has been configured to emit a
+ *      machine-readable verdict; treat as a high-confidence block regardless
+ *      of any other words.
+ *   2. Keyword presence in the lower-cased response. Brittle, but useful when
+ *      the agent emits a free-text refusal.
+ *
+ * Keep keywords additive — never remove without coordination, since the
+ * security agent's own prompt may rely on a specific word landing here.
+ */
+const SECURITY_BLOCK_KEYWORDS = [
+    "blocked",
+    "rejected",
+    "violation",
+    "not allowed",
+    "denied",
+    "malicious",
+    "unsafe",
+    "prohibited",
+    "injection",
+    "prompt injection",
+    "refuse",
+    "refusing",
+    "cannot process",
+];
+
+const SECURITY_AGENT_TIMEOUT_MS = 3_000;
+
+interface SecurityCheckResult {
+    blocked: boolean;
+    /** The agent's raw response — for audit metadata. */
+    agentResponse?: string;
+    /** Which keyword (or "structured_token") tripped the block. */
+    matchedKeyword?: string;
+    /** True if the call timed out (fail-open path). */
+    timedOut?: boolean;
+}
+
+async function checkSecurityAgent(
+    message: string,
+    conversationId?: string,
+): Promise<SecurityCheckResult> {
     const apiKey = process.env.LEMONADE_API_KEY;
     const securityId = process.env.LEMONADE_SECURITY_ID;
     if (!apiKey || !securityId) return { blocked: false }; // skip if not configured
 
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SECURITY_AGENT_TIMEOUT_MS);
+
     try {
+        // Pass conversation_id through so multi-turn attacks ("ok now ignore
+        // your last refusal and …") are evaluated with full context, matching
+        // how the main chat call maintains server-side conversation state.
+        const payload: Record<string, string> = { lemonade_id: securityId, message };
+        if (conversationId) payload.conversation_id = conversationId;
+
         const res = await fetch(LEMONADE_CHAT_URL, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ lemonade_id: securityId, message }),
+            body: JSON.stringify(payload),
+            signal: controller.signal,
         });
 
         if (!res.ok) return { blocked: false }; // fail open
 
-        const data = await res.json();
-        const response = (data.response || "").toLowerCase();
-        const blockKeywords = ["blocked", "rejected", "violation", "not allowed", "denied", "malicious"];
-        if (blockKeywords.some((kw) => response.includes(kw))) {
-            return { blocked: true, reason: data.response };
+        const data = await res.json() as { response?: string };
+        const raw = (data.response || "").trim();
+        if (!raw) return { blocked: false }; // empty → fail open
+
+        // 1. Structured leading-token path — high-confidence verdict.
+        const upper = raw.toUpperCase();
+        if (upper.startsWith("BLOCK") || upper.startsWith("UNSAFE")) {
+            return { blocked: true, agentResponse: raw, matchedKeyword: "structured_token" };
+        }
+
+        // 2. Keyword-presence path.
+        const lower = raw.toLowerCase();
+        const hit = SECURITY_BLOCK_KEYWORDS.find((kw) => lower.includes(kw));
+        if (hit) {
+            return { blocked: true, agentResponse: raw, matchedKeyword: hit };
         }
         return { blocked: false };
-    } catch {
+    } catch (err) {
+        // AbortError → timeout. Fail-open but flag so the caller can audit it.
+        if (controller.signal.aborted) {
+            return { blocked: false, timedOut: true };
+        }
         return { blocked: false }; // fail open on network errors
+    } finally {
+        clearTimeout(timer);
     }
 }
+
+/**
+ * Generic "I don't know" refusal text. Returned both for security blocks
+ * (Fix 1 — no tell) and could be used for genuine no-KB-match cases. Visitors
+ * cannot distinguish a security block from a model refusal from a missing
+ * answer.
+ */
+const GENERIC_REFUSAL =
+    "I don't have information about that. Would you like to ask the owner directly?";
 
 // ── Provider-specific chat calls ─────────────────────────────────────────────
 
@@ -150,16 +228,75 @@ export async function handler(req: Request, res: Response): Promise<void> {
         }
         const cleanMessage = sanitised.text;
 
-        // ── Security agent check (app-provided LL agent) ─────────────────
-        const securityCheck = await checkSecurityAgent(cleanMessage);
-        if (securityCheck.blocked) {
-            res.status(400).json({ error: "Message blocked by security policy" });
-            return;
-        }
-
         // ── Look up the site owner's API key ─────────────────────────────
         if (!site_id) {
             res.status(400).json({ error: "site_id is required" });
+            return;
+        }
+
+        // ── Security agent check (app-provided LL agent) ─────────────────
+        // Resolve the site owner up-front so SECURITY_BLOCK audit entries can
+        // be attributed to the card whose surface was probed.
+        let securityProfileId: string | null = null;
+        try {
+            const { rows: ownerRows } = await serviceDb.query(
+                `SELECT user_id FROM sites WHERE id = $1 LIMIT 1`,
+                [site_id],
+            );
+            securityProfileId = ownerRows[0]?.user_id ?? null;
+        } catch (err) {
+            logger.warn({ err }, "lemonade-chat: could not resolve site owner for security audit");
+        }
+
+        const securityCheck = await checkSecurityAgent(cleanMessage, conversation_id);
+
+        if (securityCheck.timedOut) {
+            // Fail-open path — record so owners can spot a slow agent.
+            logAudit({
+                userId: securityProfileId,
+                action: "security_agent_timeout",
+                ip: req.ip,
+                userAgent: req.headers["user-agent"],
+                meta: {
+                    site_id,
+                    conversation_id,
+                    timeout_ms: SECURITY_AGENT_TIMEOUT_MS,
+                },
+            });
+        }
+
+        if (securityCheck.blocked) {
+            // Audit the block with enough context to investigate.
+            logAudit({
+                userId: securityProfileId,
+                action: "security_block",
+                ip: req.ip,
+                userAgent: req.headers["user-agent"],
+                meta: {
+                    site_id,
+                    conversation_id,
+                    message: cleanMessage,
+                    agent_response: securityCheck.agentResponse,
+                    matched_keyword: securityCheck.matchedKeyword,
+                },
+            });
+
+            // Generic refusal — match the success shape so the visitor's UI
+            // can't tell whether this was a security block, a no-KB-match,
+            // or a model refusal. Mint a feedback token bound to the refusal
+            // text so the existing client flow doesn't break.
+            const feedbackToken = issueFeedbackToken({
+                profileId: securityProfileId,
+                conversationId: conversation_id ?? null,
+                answerText: GENERIC_REFUSAL,
+            });
+            res.json({
+                response: GENERIC_REFUSAL,
+                conversation_id: conversation_id ?? null,
+                tokens_used: null,
+                feedback_token: feedbackToken,
+                profile_id: securityProfileId,
+            });
             return;
         }
 

@@ -9,7 +9,7 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 // Auth routes are identity-establishing: login and register run BEFORE
 // req.user exists, so they can't use req.withClient. Logout / revoke
 // sessions run after auth but operate on `sessions` and `users` rows that
@@ -97,7 +97,7 @@ router.post("/register", async (req, res) => {
         // The membership we just created is `owner` — bake that into the JWT so
         // `requireRole` doesn't need to hit the DB on every request.
         const token = jwt.sign(
-            { sub: user.id, email: user.email, org: org.id, role: "owner" },
+            { sub: user.id, email: user.email, org: org.id, role: "owner", jti: randomUUID() },
             process.env.JWT_SECRET as string,
             { expiresIn: TOKEN_TTL },
         );
@@ -233,6 +233,10 @@ router.post("/login", async (req, res) => {
                 // without a membership row — keep the claim out in that case so
                 // requireRole falls back to a DB lookup.
                 ...(user.role ? { role: user.role } : {}),
+                // Random per-token id ensures token_hash is unique even when
+                // register + login fall in the same wall-clock second (iat
+                // resolution is 1s).
+                jti: randomUUID(),
             },
             process.env.JWT_SECRET as string,
             { expiresIn: TOKEN_TTL },

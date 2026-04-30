@@ -62,13 +62,6 @@ describe("POST /api/auth/login", () => {
             .send({ email: TEST_EMAIL, password: TEST_PASSWORD })
             .expect(200);
 
-        // Wait >1s so the login JWT's `iat` claim differs from register's,
-        // producing a distinct token_hash. Without this the sessions
-        // unique-constraint trips when the two requests fall in the same
-        // wall-clock second. Real bug worth fixing later (e.g. add a jti
-        // claim) — out of scope for PR-E1's plumbing test.
-        await new Promise((r) => setTimeout(r, 1100));
-
         const res = await request(app)
             .post("/api/auth/login")
             .send({ email: TEST_EMAIL, password: TEST_PASSWORD });
