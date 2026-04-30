@@ -22,7 +22,7 @@ set -euo pipefail
 DEPLOY_HOST="${DEPLOY_HOST:-}"                        # e.g. user@123.45.67.89
 DEPLOY_PATH="${DEPLOY_PATH:-/home/\$USER/aivibe}"    # path on the VPS
 DEPLOY_PORT="${DEPLOY_PORT:-22}"                      # SSH port
-NODE_PORT="${NODE_PORT:-3001}"                        # Express API port (3000-3500)
+NODE_PORT="${NODE_PORT:-3074}"                        # Express API port (3000-3500)
 
 # ── Derived paths ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -91,7 +91,7 @@ if [[ ! -f "$BUILD_DIR/api/.env" ]]; then
 DATABASE_URL=postgresql://aivibe_user:CHANGE_ME@127.0.0.1:5432/aivibe_db
 JWT_SECRET=CHANGE_ME_32_CHARS_MINIMUM
 ENCRYPTION_KEY=CHANGE_ME_64_HEX_CHARS
-PORT=3001
+PORT=3074
 CORS_ORIGINS=https://yourdomain.com
 
 # Optional — external services

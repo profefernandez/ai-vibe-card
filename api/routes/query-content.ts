@@ -9,10 +9,10 @@
  */
 
 import type { Response } from "express";
-import type { AuthRequest } from "../../middleware/auth.js";
-import { sanitiseInput } from "../../lib/sanitise.js";
-import { logAudit } from "../../lib/audit.js";
-import { logger } from "../../logger.js";
+import type { AuthRequest } from "../middleware/auth.js";
+import { sanitiseInput } from "../lib/sanitise.js";
+import { logAudit } from "../lib/audit.js";
+import { logger } from "../logger.js";
 
 export async function handler(req: AuthRequest, res: Response): Promise<void> {
     try {

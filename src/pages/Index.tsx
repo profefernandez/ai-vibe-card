@@ -1,4 +1,4 @@
-import HeroSection from "@/components/HeroSection";
+import HeroSection from "@/components/card/HeroSection";
 import { Link } from "react-router-dom";
 
 const SettingsIcon = () => (

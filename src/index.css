@@ -22,7 +22,7 @@
     --secondary-foreground: 210 15% 82%;
 
     --muted: 222 15% 18%;
-    --muted-foreground: 210 10% 52%;
+    --muted-foreground: 210 14% 72%;
 
     --accent: 38 80% 46%;
     --accent-foreground: 222 20% 7%;
@@ -67,7 +67,7 @@
     --secondary-foreground: 222 15% 25%;
 
     --muted: 222 10% 90%;
-    --muted-foreground: 222 10% 45%;
+    --muted-foreground: 222 14% 32%;
 
     --accent: 38 80% 44%;
     --accent-foreground: 0 0% 100%;
@@ -98,10 +98,16 @@
     @apply border-border;
   }
 
+  /* Bump the root size so all rem-based sizes
+     (text-sm, text-base, etc.) scale up proportionally. */
+  html {
+    font-size: 19px;
+  }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
-    font-size: 15px;
+    font-size: 1rem;
     line-height: 1.6;
   }
 
@@ -113,6 +119,18 @@
     font-weight: 600;
     letter-spacing: -0.025em;
     line-height: 1.25;
+  }
+
+  /* Bump the smallest text sizes so micro-copy stays readable. */
+  .text-xs {
+    font-size: 0.95rem !important; /* ~18px @ 19px root */
+    line-height: 1.4 !important;
+  }
+  [class*="text-[10px]"],
+  [class*="text-[11px]"],
+  [class*="text-[12px]"] {
+    font-size: 0.85rem !important; /* ~16px @ 19px root */
+    line-height: 1.35 !important;
   }
 }
 

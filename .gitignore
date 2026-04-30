@@ -35,3 +35,4 @@ api/uploads/
 # Deploy artifacts
 .deploy/
 ai-vibe-card-deploy.tar.gz
+*.zip

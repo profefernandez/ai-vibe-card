@@ -1,0 +1,70 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # The official postgres image grants the user named in POSTGRES_USER
+          # superuser privileges by default. global-setup needs CREATEDB on
+          # `aivibe_user` to drop+create `aivibe_test_db`, which superuser
+          # provides for free.
+          POSTGRES_USER: aivibe_user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aivibe_user -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # global-setup talks to /postgres to drop+create aivibe_test_db; tests
+      # then connect to aivibe_test_db. setup-env supplies fixture secrets if
+      # we don't override here, but pinning them keeps CI explicit.
+      DATABASE_URL: postgresql://aivibe_user:password@127.0.0.1:5432/aivibe_test_db
+      TEST_ADMIN_DATABASE_URL: postgresql://aivibe_user:password@127.0.0.1:5432/postgres
+      TEST_DATABASE_URL: postgresql://aivibe_user:password@127.0.0.1:5432/aivibe_test_db
+      JWT_SECRET: ci-jwt-secret-at-least-32-chars-long-for-vitest-runs
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      FEEDBACK_HMAC_SECRET: ci-feedback-hmac-secret-at-least-32-chars-vitest
+      CORS_ORIGINS: http://localhost:8080
+      DB_SSL: "false"
+
+    steps:
+      - name: Checkout
+        # deploy.yml pins to v4 with a TODO to swap to a SHA; matching its
+        # convention so the two workflows update together.
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install api dependencies
+        working-directory: api
+        run: npm ci
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: API tests
+        working-directory: api
+        run: npm test

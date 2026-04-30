@@ -43,6 +43,7 @@ export interface Profile {
     robots_txt: unknown;
     slug: string;
     ai_query_enabled: boolean;
+    show_qr_scan_link?: boolean;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────

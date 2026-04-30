@@ -8,11 +8,11 @@
  */
 
 import type { Response } from "express";
-import { type AuthRequest } from "../../middleware/auth.js";
-import { logAudit } from "../../lib/audit.js";
-import { sanitizeContent } from "../../lib/sanitize-content.js";
-import { assertPublicHost, SafeFetchError } from "../../lib/safe-fetch.js";
-import { logger } from "../../logger.js";
+import { type AuthRequest } from "../middleware/auth.js";
+import { logAudit } from "../lib/audit.js";
+import { sanitizeContent } from "../lib/sanitize-content.js";
+import { assertPublicHost, SafeFetchError } from "../lib/safe-fetch.js";
+import { logger } from "../logger.js";
 
 type Block = {
     heading: string | null;

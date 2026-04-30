@@ -11,9 +11,9 @@
 
 import { promises as dns } from "node:dns";
 import type { Response } from "express";
-import { type AuthRequest } from "../../middleware/auth.js";
-import { logAudit } from "../../lib/audit.js";
-import { safeFetch, SafeFetchError } from "../../lib/safe-fetch.js";
+import { type AuthRequest } from "../middleware/auth.js";
+import { logAudit } from "../lib/audit.js";
+import { safeFetch, SafeFetchError } from "../lib/safe-fetch.js";
 
 /**
  * Public detail enum. Replaces the previous free-form string which leaked

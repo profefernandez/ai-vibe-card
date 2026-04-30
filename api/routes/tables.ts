@@ -49,13 +49,36 @@ const ALLOWED_TABLES = new Set([
 // All non-listed columns are stripped on INSERT/UPDATE.
 // "id" is always safe to read but never writable.
 const TABLE_COLUMNS: Record<string, string[]> = {
-    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "slug", "ai_query_enabled", "updated_at"],
+    profiles: ["user_id", "display_name", "tagline", "bio", "avatar_url", "cta_url", "cta_label", "cta_embed", "social_links", "card_layout", "theme", "accent_color", "seo_title", "seo_description", "og_image_url", "twitter_handle", "robots_txt", "slug", "ai_query_enabled", "show_qr_scan_link", "updated_at"],
     sites: ["user_id", "domain", "name", "verified", "verification_token", "verification_method", "verified_at", "verification_expires_at", "scrape_status", "page_count", "share_usage_limit", "last_scraped_at", "refresh_interval_hours", "updated_at"],
     site_pages: ["site_id", "url", "title", "markdown", "html", "metadata"],
     content_blocks: ["site_id", "page_id", "heading", "body", "images", "category", "tags", "visibility", "block_order"],
     ai_preferences: ["user_id", "system_prompt", "rules", "personality", "response_style", "prompt_injection_rules", "safety_protocol", "updated_at"],
     api_connections: ["user_id", "provider", "api_key_encrypted", "model_name", "is_active"],
 };
+
+// JSONB columns must be JSON.stringify'd before being passed to pg as a parameter,
+// otherwise the driver serializes JS arrays/objects with Postgres array syntax,
+// which jsonb refuses. text[] columns (images, tags) intentionally stay as arrays.
+const JSONB_COLUMNS: Record<string, Set<string>> = {
+    profiles: new Set(["social_links", "robots_txt"]),
+    site_pages: new Set(["metadata"]),
+    ai_preferences: new Set(["rules", "prompt_injection_rules"]),
+};
+
+function serializeJsonbColumns(table: string, row: Record<string, unknown>): Record<string, unknown> {
+    const jsonbCols = JSONB_COLUMNS[table];
+    if (!jsonbCols) return row;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(row)) {
+        if (jsonbCols.has(k) && v !== null && typeof v !== "string") {
+            out[k] = JSON.stringify(v);
+        } else {
+            out[k] = v;
+        }
+    }
+    return out;
+}
 
 
 function validateTable(table: string, res: any): boolean {
@@ -223,7 +246,7 @@ router.post("/:table", requireAuth, requireRole("owner", "admin"), async (req: A
             expires.setDate(expires.getDate() + 7);
             c.verification_expires_at = expires.toISOString();
         }
-        return c;
+        return serializeJsonbColumns(table, c);
     });
     if (cleaned.length === 0 || Object.keys(cleaned[0]).length === 0) {
         res.status(400).json({ error: "No valid columns provided" });
@@ -284,15 +307,16 @@ router.patch("/:table", requireAuth, requireRole("owner", "admin"), async (req: 
     }
     addSiteOwnership(table, req.user!.id, clauses, values);
 
-    const cleaned = pickColumns(table, req.body as Record<string, unknown>);
-    if (Object.keys(cleaned).length === 0) {
+    const cleanedRaw = pickColumns(table, req.body as Record<string, unknown>);
+    if (Object.keys(cleanedRaw).length === 0) {
         res.status(400).json({ error: "No valid columns to update" });
         return;
     }
     // Encrypt API keys before storage
-    if (table === "api_connections" && typeof cleaned.api_key_encrypted === "string" && cleaned.api_key_encrypted) {
-        cleaned.api_key_encrypted = encrypt(cleaned.api_key_encrypted);
+    if (table === "api_connections" && typeof cleanedRaw.api_key_encrypted === "string" && cleanedRaw.api_key_encrypted) {
+        cleanedRaw.api_key_encrypted = encrypt(cleanedRaw.api_key_encrypted);
     }
+    const cleaned = serializeJsonbColumns(table, cleanedRaw);
 
     const setClauses = Object.keys(cleaned).map((col) => {
         values.push(cleaned[col]);
@@ -353,13 +377,14 @@ router.post("/:table/upsert", requireAuth, requireRole("owner", "admin"), async 
         return;
     }
 
-    const cleaned = pickColumns(table, data);
+    const cleanedRaw = pickColumns(table, data);
 
     // Force ownership column to authenticated user
     const ownCol = ownerColumn(table);
-    if (ownCol) cleaned[ownCol] = req.user!.id;
-    if (ORG_SCOPED_TABLES.has(table)) cleaned.organization_id = req.user!.organizationId;
+    if (ownCol) cleanedRaw[ownCol] = req.user!.id;
+    if (ORG_SCOPED_TABLES.has(table)) cleanedRaw.organization_id = req.user!.organizationId;
 
+    const cleaned = serializeJsonbColumns(table, cleanedRaw);
     const colNames = Object.keys(cleaned);
     if (colNames.length === 0) {
         res.status(400).json({ error: "No valid columns provided" });

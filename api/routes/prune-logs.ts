@@ -21,9 +21,9 @@
 
 import type { Request, Response } from "express";
 import { timingSafeEqual } from "node:crypto";
-import { serviceDb } from "../../db.js";
-import { logger } from "../../logger.js";
-import { logAudit } from "../../lib/audit.js";
+import { serviceDb } from "../db.js";
+import { logger } from "../logger.js";
+import { logAudit } from "../lib/audit.js";
 
 const CHUNK = 10_000;
 const MAX_ITERATIONS = 100; // 100 * 10_000 = 1M rows / table / run

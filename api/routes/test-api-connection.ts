@@ -9,10 +9,10 @@
  */
 
 import type { Response } from "express";
-import type { AuthRequest } from "../../middleware/auth.js";
-import { decrypt, isEncrypted } from "../../lib/crypto.js";
-import { logAudit } from "../../lib/audit.js";
-import { logger } from "../../logger.js";
+import type { AuthRequest } from "../middleware/auth.js";
+import { decrypt, isEncrypted } from "../lib/crypto.js";
+import { logAudit } from "../lib/audit.js";
+import { logger } from "../logger.js";
 
 export async function handler(req: AuthRequest, res: Response): Promise<void> {
     const { provider } = req.body as { provider?: string };

@@ -4,8 +4,8 @@
  */
 
 import { Router } from "express";
-import { requireAuth } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/requireRole.js";
+import { requireAuth } from "../middleware/auth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { handler as queryContent } from "./query-content.js";
 import { handler as scrapeSite } from "./scrape-site.js";
 import { handler as testApiConnection } from "./test-api-connection.js";

@@ -19,12 +19,12 @@
  */
 
 import type { Request, Response } from "express";
-import { serviceDb } from "../../db.js";
-import { logger } from "../../logger.js";
-import { decrypt, isEncrypted } from "../../lib/crypto.js";
-import { sanitiseInput, filterOutput } from "../../lib/sanitise.js";
-import { logAudit } from "../../lib/audit.js";
-import { issueFeedbackToken } from "../../lib/feedback-token.js";
+import { serviceDb } from "../db.js";
+import { logger } from "../logger.js";
+import { decrypt, isEncrypted } from "../lib/crypto.js";
+import { sanitiseInput, filterOutput } from "../lib/sanitise.js";
+import { logAudit } from "../lib/audit.js";
+import { issueFeedbackToken } from "../lib/feedback-token.js";
 
 const LEMONADE_CHAT_URL = "https://api.launchlemonade.app/v1/chat";
 

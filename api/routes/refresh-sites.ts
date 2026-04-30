@@ -11,13 +11,13 @@
  */
 
 import type { Request, Response } from "express";
-import { serviceDb } from "../../db.js";
+import { serviceDb } from "../db.js";
 import { handler as scrapeSiteHandler } from "./scrape-site.js";
-import { logger } from "../../logger.js";
-import { sanitizeContent } from "../../lib/sanitize-content.js";
+import { logger } from "../logger.js";
+import { sanitizeContent } from "../lib/sanitize-content.js";
 import { promises as dns } from "node:dns";
 import { timingSafeEqual } from "node:crypto";
-import { safeFetch } from "../../lib/safe-fetch.js";
+import { safeFetch } from "../lib/safe-fetch.js";
 
 export async function handler(req: Request, res: Response): Promise<void> {
     try {

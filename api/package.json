@@ -8,6 +8,10 @@
         "dev": "tsx watch index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:unit": "vitest run test/unit",
+        "test:integration": "vitest run test/integration",
         "migrate:up": "node-pg-migrate -m migrations -j ts up",
         "migrate:down": "node-pg-migrate -m migrations -j ts down",
         "migrate:create": "node-pg-migrate -m migrations -j ts create",
@@ -15,6 +19,7 @@
         "migrate:up:prod": "node-pg-migrate -m dist/migrations -j js up"
     },
     "dependencies": {
+        "@types/pdf-parse": "^1.1.5",
         "bcrypt": "^6.0.0",
         "cors": "^2.8.5",
         "dotenv": "^16.3.1",
@@ -25,6 +30,7 @@
         "multer": "^2.1.1",
         "node-pg-migrate": "^8.0.4",
         "nodemailer": "^8.0.5",
+        "pdf-parse": "^2.4.5",
         "pg": "^8.11.3",
         "pino": "^9.5.0",
         "pino-http": "^10.3.0",
@@ -38,8 +44,11 @@
         "@types/multer": "^2.1.0",
         "@types/nodemailer": "^8.0.0",
         "@types/pg": "^8.10.9",
+        "@types/supertest": "^6.0.2",
         "pino-pretty": "^11.2.2",
+        "supertest": "^7.0.0",
         "tsx": "^4.7.0",
-        "typescript": "^5.3.3"
+        "typescript": "^5.3.3",
+        "vitest": "^2.1.8"
     }
 }

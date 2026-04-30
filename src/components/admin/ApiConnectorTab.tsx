@@ -14,6 +14,9 @@ interface ApiConnectorTabProps {
 const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
   const [connections, setConnections] = useState<ApiConnection[]>([]);
   const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  // For Lemonade rows, model_name *is* the agent ID — column is reused.
+  // For OpenAI/Anthropic/Google, this stays as a real model name.
+  const [modelInputs, setModelInputs] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
@@ -35,26 +38,43 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
 
   const saveConnection = async (providerId: string, defaultModel: string) => {
     const key = keyInputs[providerId]?.trim();
-    if (!key) return;
-
     const existing = getConnection(providerId);
+    // Lemonade requires the user's own Agent ID; other providers fall back to defaultModel.
+    const modelOrAgent =
+      modelInputs[providerId]?.trim() || existing?.model_name || defaultModel;
+
+    if (providerId === "lemonade" && (!modelOrAgent || modelOrAgent === "default")) {
+      toast({
+        title: "Agent ID required",
+        description: "Paste the Agent ID from your Launch Lemonade dashboard.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Allow saving Agent ID alone (no new key) when the user already has a key on file.
+    if (!key && !existing) return;
+
     if (existing) {
       await db
         .from("api_connections")
-        .update({ api_key_encrypted: key, model_name: defaultModel })
+        .update({
+          ...(key ? { api_key_encrypted: key } : {}),
+          model_name: modelOrAgent,
+        })
         .eq("id", existing.id);
     } else {
       await db.from("api_connections").insert({
         user_id: user.id,
         provider: providerId,
         api_key_encrypted: key,
-        model_name: defaultModel,
+        model_name: modelOrAgent,
         is_active: false,
       });
     }
     setKeyInputs({ ...keyInputs, [providerId]: "" });
+    setModelInputs({ ...modelInputs, [providerId]: "" });
     fetchConnections();
-    toast({ title: "API key saved" });
+    toast({ title: "Saved" });
   };
 
   const toggleActive = async (providerId: string) => {
@@ -129,34 +149,73 @@ const ApiConnectorTab = ({ user }: ApiConnectorTabProps) => {
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showKey[provider.id] ? "text" : "password"}
-                    placeholder={hasKey ? "••••••••" : "Enter API key"}
-                    value={keyInputs[provider.id] || ""}
-                    onChange={(e) => setKeyInputs({ ...keyInputs, [provider.id]: e.target.value })}
-                    className="bg-secondary/60 border-border/30 text-xs pr-8"
-                    aria-label={`API key for ${provider.label}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey({ ...showKey, [provider.id]: !showKey[provider.id] })}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label={showKey[provider.id] ? `Hide ${provider.label} API key` : `Show ${provider.label} API key`}
+              <div className="space-y-2">
+                <div>
+                  <label
+                    htmlFor={`api-key-${provider.id}`}
+                    className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-1"
                   >
-                    {showKey[provider.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  </button>
+                    API key
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id={`api-key-${provider.id}`}
+                      type={showKey[provider.id] ? "text" : "password"}
+                      placeholder={hasKey ? "•••••••• (already saved)" : "Paste API key"}
+                      value={keyInputs[provider.id] || ""}
+                      onChange={(e) => setKeyInputs({ ...keyInputs, [provider.id]: e.target.value })}
+                      className="bg-secondary/60 border-border/30 text-xs pr-8"
+                      aria-label={`API key for ${provider.label}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey({ ...showKey, [provider.id]: !showKey[provider.id] })}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showKey[provider.id] ? `Hide ${provider.label} API key` : `Show ${provider.label} API key`}
+                    >
+                      {showKey[provider.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                    </button>
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => saveConnection(provider.id, provider.defaultModel)}
-                  disabled={!keyInputs[provider.id]?.trim()}
-                  aria-label={`Save ${provider.label} API key`}
-                >
-                  Save
-                </Button>
+
+                <div>
+                  <label
+                    htmlFor={`api-model-${provider.id}`}
+                    className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-1"
+                  >
+                    {provider.id === "lemonade" ? "Agent ID" : "Model"}
+                  </label>
+                  <Input
+                    id={`api-model-${provider.id}`}
+                    type="text"
+                    placeholder={
+                      provider.id === "lemonade"
+                        ? "e.g. 1776043025280x542737663275827200"
+                        : provider.defaultModel
+                    }
+                    value={modelInputs[provider.id] ?? (conn?.model_name && conn.model_name !== "default" ? conn.model_name : "")}
+                    onChange={(e) => setModelInputs({ ...modelInputs, [provider.id]: e.target.value })}
+                    className="bg-secondary/60 border-border/30 text-xs font-mono"
+                    aria-label={`${provider.id === "lemonade" ? "Agent ID" : "Model"} for ${provider.label}`}
+                  />
+                  {provider.id === "lemonade" && (
+                    <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      Each user's chat is powered by their own Lemonade agent — find the ID in your LL dashboard.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => saveConnection(provider.id, provider.defaultModel)}
+                    disabled={!keyInputs[provider.id]?.trim() && !modelInputs[provider.id]?.trim()}
+                    aria-label={`Save ${provider.label} settings`}
+                  >
+                    Save
+                  </Button>
+                </div>
               </div>
 
               {hasKey && (

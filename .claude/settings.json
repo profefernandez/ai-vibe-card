@@ -3,6 +3,7 @@
     "allow": [
       "Edit",
       "Write",
+      "NotebookEdit",
       "Bash(npm:*)",
       "Bash(node:*)",
       "Bash(npx:*)",

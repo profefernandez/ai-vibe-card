@@ -11,7 +11,7 @@ import { Loader2, LogOut, ExternalLink, Copy, Check } from "lucide-react";
 import AdminSidebar, { type AdminSection } from "@/components/admin/AdminSidebar";
 import OnboardingWizard from "@/components/admin/OnboardingWizard";
 import SiteImportTab from "@/components/admin/SiteImportTab";
-import ContentManagerTab from "@/components/admin/ContentManagerTab";
+import KnowledgeBaseTab from "@/components/admin/KnowledgeBaseTab";
 import ApiConnectorTab from "@/components/admin/ApiConnectorTab";
 import AiTrainingTab from "@/components/admin/AiTrainingTab";
 import ConnectionsTab from "@/components/admin/ConnectionsTab";
@@ -20,7 +20,7 @@ import SettingsTab from "@/components/admin/SettingsTab";
 
 const sectionTitles: Record<AdminSection, string> = {
   import: "Site Import",
-  content: "Content Manager",
+  kb: "Knowledge Base",
   ai: "AI Training",
   cards: "Connections",
   api: "API Connectors",
@@ -154,8 +154,8 @@ const Admin = () => {
     switch (activeSection) {
       case "import":
         return <SiteImportTab user={user} sites={sites} fetchSites={fetchSites} />;
-      case "content":
-        return <ContentManagerTab sites={sites} />;
+      case "kb":
+        return <KnowledgeBaseTab sites={sites} />;
       case "api":
         return <ApiConnectorTab user={user} />;
       case "ai":

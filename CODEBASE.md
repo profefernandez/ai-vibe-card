@@ -12,7 +12,7 @@ An AI-powered digital business card / personal website. The owner can import the
 | --------------- | -------------------------------------------------------- |
 | Framework       | React 18 + TypeScript                                    |
 | Build tool      | Vite (serves on port **8080**)                           |
-| Package manager | **Bun**                                                  |
+| Package manager | **npm**                                                  |
 | Styling         | Tailwind CSS + `shadcn/ui` (Radix UI)                    |
 | Animation       | Framer Motion                                            |
 | Backend / DB    | Self-hosted PostgreSQL + Express API (Scala Hosting VPS) |
@@ -29,57 +29,112 @@ An AI-powered digital business card / personal website. The owner can import the
 ```
 src/
 ├── main.tsx              # Entry point, mounts <App />
-├── App.tsx               # Router + global providers (QueryClient, Toaster, Tooltip)
+├── App.tsx               # Router + global providers (QueryClient, Toaster, Tooltip, ErrorBoundary)
 ├── pages/
 │   ├── Index.tsx         # Public landing page → renders <HeroSection />
 │   ├── Auth.tsx          # Sign in / sign up page (JWT auth against VPS API)
 │   ├── Admin.tsx         # Protected admin dashboard (sidebar + tab routing)
+│   ├── CardShare.tsx     # Public per-owner card route → renders <CardView />
 │   └── NotFound.tsx      # 404 fallback
 ├── components/
-│   ├── HeroSection.tsx   # Main animated business card (drag-to-explore gesture)
-│   ├── ExplorePanel.tsx  # AI content search panel (calls lemonade-chat with site context)
-│   ├── AiChatAgent.tsx   # Full AI chat agent component
-│   ├── SocialLinks.tsx   # Social media icon links
-│   ├── LinkCategories.tsx
-│   ├── NavLink.tsx
-│   ├── ServicesSection.tsx
-│   ├── ValueProps.tsx
-│   └── admin/            # Admin dashboard tab components
-│       ├── AdminSidebar.tsx        # Sidebar nav (import/content/ai/cards/api/profile/settings)
-│       ├── SiteImportTab.tsx       # Scrape an existing website via VPS scrape-site API
-│       ├── ContentManagerTab.tsx   # Browse/edit scraped content blocks
-│       ├── ApiConnectorTab.tsx     # Connect external APIs (OpenAI key, etc.)
-│       ├── AiTrainingTab.tsx       # Configure AI persona, rules, system prompt
-│       ├── ReceivedCardsTab.tsx    # View cards/leads received from visitors
-│       ├── ProfileTab.tsx          # Edit profile (name, bio, photo, Calendly URL)
-│       └── SettingsTab.tsx         # App settings
-├── integrations/
-│   └── api/
-│       ├── client.ts     # VPS REST client (reads VITE_API_URL env var)
-│       └── types.ts      # TypeScript types (kept for reference)
+│   ├── ErrorBoundary.tsx # Top-level error boundary
+│   ├── card/             # Public card surface (grouped by feature)
+│   │   ├── HeroSection.tsx   # Animated card wrapper for /
+│   │   ├── CardView.tsx      # Card visual + drag-to-explore gesture
+│   │   ├── ExplorePanel.tsx  # AI content search panel (POSTs to lemonade-chat)
+│   │   └── SocialLinks.tsx   # Social media icon links
+│   ├── admin/            # Admin dashboard tabs
+│   │   ├── AdminSidebar.tsx       # Sidebar nav
+│   │   ├── SiteImportTab.tsx      # Scrape an existing website via scrape-site API
+│   │   ├── KnowledgeBaseTab.tsx   # Browse/edit KB folders + items (was ContentManagerTab)
+│   │   ├── ApiConnectorTab.tsx    # Configure external API keys (encrypted)
+│   │   ├── AiTrainingTab.tsx      # AI persona, rules, system prompt
+│   │   ├── ConnectionsTab.tsx     # View cards/leads (was ReceivedCardsTab)
+│   │   ├── ProfileTab.tsx         # Edit public card profile
+│   │   ├── SettingsTab.tsx        # App settings
+│   │   ├── OnboardingWizard.tsx   # First-run setup
+│   │   └── MiniCard.tsx           # Compact card preview used inside admin
+│   └── ui/               # shadcn/ui primitives (button, input, card, etc.)
 ├── lib/
-│   └── utils.ts          # `cn()` utility (clsx + tailwind-merge)
+│   ├── apiClient.ts      # 1-line back-compat shim → re-exports from ./api
+│   ├── api/              # API client split by resource
+│   │   ├── client.ts         # API_BASE, session storage, listener bus, apiFetch()
+│   │   ├── auth.ts           # auth.login / register / logout / subscribe
+│   │   ├── functions.ts      # functions.invoke()
+│   │   ├── upload.ts         # upload.avatar / deleteAvatar / kbImage
+│   │   ├── kbImages.ts       # KbImage type + kbImages CRUD
+│   │   ├── kb.ts             # KbFolder/KbItem types + kbFolders/kbItems CRUD
+│   │   ├── tables.ts         # QueryBuilder + from() (generic CRUD client)
+│   │   └── index.ts          # Aggregates apiClient + re-exports types
+│   ├── constants.ts      # Shared constants (incl. fallback explore suggestions)
+│   ├── formatters.ts     # Display formatters
+│   ├── theme.ts          # Theme tokens
+│   ├── utils.ts          # cn() utility
+│   └── validations.ts    # Zod schemas
+├── contexts/
+│   └── AuthContext.tsx   # JWT session context, subscribes to apiClient auth events
 ├── hooks/
-│   ├── use-mobile.tsx    # Detect mobile breakpoint
-│   └── use-toast.ts      # Toast notification hook
-└── components/ui/        # shadcn/ui primitive components (button, input, card, etc.)
+│   ├── use-async-data.tsx
+│   ├── use-mobile.tsx
+│   └── use-toast.ts
+├── types/
+│   └── index.ts          # Single source of truth for shared TS types
+├── assets/
+│   └── profile-photo.png # Default profile avatar
+└── test/
+    ├── setup.ts          # Vitest jsdom setup (jest-dom matchers)
+    └── example.test.ts   # Placeholder unit tests
 
 api/
-├── index.ts              # Express server entry point (port 3001)
-├── db.ts                 # PostgreSQL pool (pg)
+├── index.ts              # Express entry — exports validateEnv(), createApp(), start()
+├── db.ts                 # Postgres pools (default + service/RLS-bypass) + withRequestClient
+├── logger.ts             # Pino logger
 ├── middleware/
-│   └── auth.ts           # JWT Bearer token verification
-└── routes/
-    ├── auth.ts           # POST /api/auth/login, /api/auth/register
-    ├── tables.ts         # Generic CRUD: GET/POST/PATCH/DELETE /api/tables/:table
-    └── functions/
-        ├── index.ts          # Mounts function handlers
-        ├── scrape-site.ts    # Firecrawl → stores site_pages + content_blocks
-        ├── query-content.ts  # AI semantic search over content_blocks
-        └── test-api-connection.ts  # Validates external API keys
+│   ├── auth.ts           # JWT Bearer verification
+│   └── requireRole.ts    # Role-based route guard
+├── routes/
+│   ├── auth.ts                # /api/auth/login, /register, /refresh, /logout
+│   ├── card.ts                # /api/card (owner) + /api/card/:slug (public) + /api/connections
+│   ├── feedback.ts            # /api/feedback (HMAC-bound thumbs up/down on AI responses)
+│   ├── kb.ts                  # /api/kb/folders + /api/kb/items
+│   ├── kbImages.ts            # /api/kb/images CRUD
+│   ├── kbUpload.ts            # /api/kb/upload (multipart)
+│   ├── tables.ts              # Generic CRUD dispatcher (legacy; being peeled off)
+│   ├── upload.ts              # /api/upload/avatar
+│   ├── functions.ts           # Mounts /api/functions/* dispatcher (was functions/index.ts)
+│   ├── lemonade-chat.ts       # AI chat — calls Lemonade/OpenAI/Anthropic/Google
+│   ├── query-content.ts       # AI semantic search over content_blocks
+│   ├── scrape-site.ts         # Firecrawl → site_pages + content_blocks
+│   ├── refresh-sites.ts       # Cron: re-scrape sites
+│   ├── prune-logs.ts          # Cron: log retention
+│   ├── verify-domain.ts       # Domain ownership verification
+│   └── test-api-connection.ts # Validates external API keys
+├── lib/
+│   ├── audit.ts          # Audit log writes
+│   ├── crypto.ts         # AES-256-GCM (api_connections.api_key_encrypted)
+│   ├── email.ts          # Nodemailer transport
+│   ├── feedback-token.ts # HMAC-bound feedback tokens
+│   ├── safe-fetch.ts     # Request wrapper (retry/timeout) for outbound HTTP
+│   ├── sanitise.ts       # LLM input/output prompt-injection guard
+│   └── sanitize-content.ts  # HTML scrub for scraped pages (NOT a duplicate of sanitise.ts)
+├── migrations/           # node-pg-migrate (TypeScript)
+├── scripts/              # Ops/seed scripts (test-rls-isolation, audit-api-keys, seed-user, …)
+└── test/
+    ├── helpers/
+    │   ├── build-app.ts       # Test wrapper → calls createApp() (no listen)
+    │   ├── db-fixtures.ts     # truncateAll, createOrgWithOwner
+    │   ├── global-setup.ts    # Drops/creates aivibe_test_db, runs migrations
+    │   └── setup-env.ts       # Per-worker env (NODE_ENV=test, fixture secrets)
+    └── integration/
+        ├── auth.test.ts       # register → login → JWT-protected route
+        └── rls.test.ts        # Cross-org RLS isolation (uses rls_test_user role)
 
 database/
-  setup.sql             → Full self-hosted PostgreSQL schema for Scala Hosting VPS
+  setup.sql              # Full self-hosted PostgreSQL schema (legacy reference; live schema lives in api/migrations/)
+
+.github/workflows/
+  test.yml               # CI: frontend + API tests against postgres:16 service
+  deploy.yml             # CD: rsync + docker compose up to VPS on push to main
 ```
 
 ---
@@ -112,12 +167,13 @@ database/
 ### Admin Dashboard (`/admin`)
 - Protected by JWT session (stored in localStorage)
 - **Site Import** — enter a domain, triggers `scrape-site` API endpoint, stores pages as content blocks
-- **Content Manager** — browse/edit/delete content blocks per site
+- **Knowledge Base** — folders + items used as AI grounding context (replaces legacy Content Manager)
 - **AI Training** — set AI personality, response style, custom rules, system prompt
 - **API Connectors** — configure external service API keys (stored encrypted)
-- **Received Cards** — view visitor interactions / leads
+- **Connections** — view visitor card exchanges / leads (renamed from Received Cards)
 - **Profile** — edit the public card's display information
 - **Settings** — miscellaneous app settings
+- **Onboarding Wizard** — first-run setup flow
 
 ---
 
@@ -131,8 +187,15 @@ database/
 | `site_pages`      | Raw scraped pages (markdown, html, metadata JSONB)         |
 | `content_blocks`  | Parsed content (heading, body, images[], tags[], category) |
 | `ai_preferences`  | AI persona config (personality, system_prompt, rules)      |
-| `api_connections` | External API keys per user                                 |
+| `api_connections` | External API keys per user (AES-256-GCM encrypted)         |
 | `received_cards`  | Visitor card exchanges / leads                             |
+| `organizations`   | Org tenancy boundary for RLS                               |
+| `memberships`     | User ↔ org with role                                       |
+| `kb_folders`      | KB folders (per site, flag `use_for_ai` opts into AI context) |
+| `kb_items`        | KB items — text/url/image/file (citable unit for AI grounding) |
+| `kb_images`       | KB image metadata + storage refs                           |
+| `feedback`        | Thumbs up/down on AI responses (HMAC-bound feedback tokens) |
+| `sessions`        | Refresh-token sessions (per JWT issuance)                  |
 
 ---
 
@@ -160,18 +223,30 @@ PORT=3001
 ## Development Commands
 
 ```bash
-# Install dependencies
-bun install
+# Install dependencies (root + api)
+npm install
+(cd api && npm install)
 
-# Start dev server (http://localhost:8080)
-bun run dev
+# Start frontend dev server (http://localhost:8080)
+npm run dev
+
+# Start API dev server (http://localhost:3001)
+(cd api && npm run dev)
+
+# Postgres (local docker)
+docker start aivibe-pg
 
 # Build for production
-bun run build
+npm run build
 
-# Run tests
-bun run test
+# Run tests (frontend)
+npm test
+
+# Run tests (API — requires postgres + creates aivibe_test_db)
+(cd api && npm test)
 ```
+
+Tests are split between root (Vitest + jsdom for components) and `api/` (Vitest + supertest for routes, Vitest + raw `pg` for RLS). CI in `.github/workflows/test.yml` runs both against a postgres:16-alpine service.
 
 ---
 

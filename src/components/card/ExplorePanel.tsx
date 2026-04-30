@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { apiClient as db } from "@/lib/apiClient";
+import { apiClient as db, type KbImage } from "@/lib/apiClient";
 import { EXPLORE_SUGGESTIONS } from "@/lib/constants";
 import ReactMarkdown from "react-markdown";
 
@@ -102,6 +102,24 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
+
+  // Banner slideshow — advances one slot per Q&A turn, hidden when empty.
+  const [kbImages, setKbImages] = useState<KbImage[]>([]);
+  const [kbIndex, setKbIndex] = useState(0);
+
+  useEffect(() => {
+    if (!profileId) return;
+    void db.kbImages.listPublic(profileId).then(({ data }) => setKbImages(data));
+  }, [profileId]);
+
+  // Advance the slide each time a new answer lands.
+  useEffect(() => {
+    if (!answer || kbImages.length === 0) return;
+    setKbIndex((i) => (i + 1) % kbImages.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answer]);
+
+  const currentBanner = kbImages.length > 0 ? kbImages[kbIndex % kbImages.length] : null;
 
   useEffect(() => {
     setFeedbackStatus("idle");
@@ -205,6 +223,33 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
   return (
     <div className="flex flex-col h-full bg-background">
+
+      {/* Framed banner slideshow — advances per Q&A turn. */}
+      {currentBanner && (
+        <div className="px-6 pt-6 pb-2 flex flex-col items-center">
+          <div className="relative w-full max-w-sm">
+            <div className="bg-white p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={currentBanner.id}
+                  src={currentBanner.url}
+                  alt={currentBanner.caption || "Image"}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.45 }}
+                  className="w-full aspect-[4/3] object-cover rounded-sm"
+                />
+              </AnimatePresence>
+              {currentBanner.caption && (
+                <p className="text-xs text-neutral-700 text-center mt-2 font-sans italic line-clamp-1">
+                  {currentBanner.caption}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">

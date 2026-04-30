@@ -1,6 +1,6 @@
 /**
  * Shared formatting utilities.
- * Re-used across SiteImportTab, ContentManagerTab, etc.
+ * Re-used across SiteImportTab, KnowledgeBaseTab, etc.
  */
 
 /** Relative time label from a date string — "Just now", "5m ago", "3d ago", etc. */

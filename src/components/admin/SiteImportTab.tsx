@@ -162,12 +162,17 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
       {/* Verification panel for selected unverified site */}
       {selectedSiteData && !selectedSiteData.verified && selectedSiteData.verification_token && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-amber-500" /> Verify Domain Ownership
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Prove you own <strong>{selectedSiteData.domain}</strong> using one of these methods. Verification is required before importing content.
-          </p>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-amber-500/90 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5" /> Verify domain ownership
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground break-all">
+              {selectedSiteData.domain}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Prove you own this domain using one of the methods below. Verification is required before importing content.
+            </p>
+          </div>
 
           <Tabs defaultValue="dns_txt" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -178,26 +183,26 @@ const SiteImportTab = ({ user, sites, fetchSites }: SiteImportTabProps) => {
               <p className="text-sm text-muted-foreground">
                 Add a TXT record to your domain's DNS settings:
               </p>
-              <div className="rounded-lg bg-secondary/60 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Host/Name</p>
-                    <code className="text-sm text-foreground">_60watt-verify</code>
+              <div className="rounded-lg bg-secondary/60 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Host / Name</p>
+                    <code className="block mt-0.5 text-sm font-medium text-white break-all">_60watt-verify</code>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => copyToClipboard("_60watt-verify")} aria-label="Copy host">
                     <Copy className="w-3 h-3" />
                   </Button>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Value</p>
-                    <code className="text-sm text-foreground break-all">{selectedSiteData.verification_token}</code>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">Value</p>
+                    <code className="block mt-0.5 text-sm font-medium text-amber-200 break-all">{selectedSiteData.verification_token}</code>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => copyToClipboard(selectedSiteData.verification_token!)} aria-label="Copy token">
                     <Copy className="w-3 h-3" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Type: TXT &middot; TTL: 300 (or default)</p>
+                <p className="text-[11px] text-muted-foreground/60">Type: TXT &middot; TTL: 300 (or default)</p>
               </div>
               <Button
                 onClick={() => handleVerify(selectedSiteData.id, "dns_txt")}

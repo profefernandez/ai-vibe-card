@@ -1,15 +1,14 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
-import type { SocialLink, Profile, CardLayout } from "@/types";
+import type { Profile, CardLayout } from "@/types";
 import ExplorePanel from "./ExplorePanel";
 import { Search, ChevronLeft, Calendar, X } from "lucide-react";
-import { apiClient as db } from "@/lib/apiClient";
 import { applyTheme } from "@/lib/theme";
 
-/** Upsert a <meta> tag in <head> by name or property attribute. */
 function setMetaTag(key: string, content: string, isProperty = false) {
   const attr = isProperty ? "property" : "name";
   let el = document.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
@@ -21,76 +20,48 @@ function setMetaTag(key: string, content: string, isProperty = false) {
   el.setAttribute("content", content);
 }
 
-const HeroSection = () => {
+export interface CardViewProps {
+  profile: Profile | null;
+  siteId?: string | null;
+  profileId?: string | null;
+  showScanLink?: boolean;
+  applyMeta?: boolean;
+}
+
+const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [siteId, setSiteId] = useState<string | null>(null);
+  const [isScanOpen, setIsScanOpen] = useState(false);
 
   useEffect(() => {
-    // Fetch the first profile (site owner)
-    db
-      .from("profiles")
-      .select("*")
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setProfile({
-            display_name: data.display_name || "",
-            tagline: data.tagline || "",
-            bio: data.bio || "",
-            avatar_url: data.avatar_url || "",
-            cta_url: data.cta_url || "",
-            cta_label: data.cta_label || "Get in Touch",
-            cta_embed: data.cta_embed || "",
-            social_links: Array.isArray(data.social_links) ? data.social_links : [],
-            card_layout: data.card_layout === "bold" ? "bold" : "classic",
-          });
+    if (!profile || !applyMeta) return;
+    applyTheme(profile.theme || "dark", profile.accent_color || "amber");
 
-          // Apply theme + accent color from profile settings
-          applyTheme(data.theme || "dark", data.accent_color || "amber");
+    if (profile.seo_title) {
+      document.title = profile.seo_title;
+      setMetaTag("og:title", profile.seo_title, true);
+      setMetaTag("twitter:title", profile.seo_title);
+    }
+    if (profile.seo_description) {
+      setMetaTag("description", profile.seo_description);
+      setMetaTag("og:description", profile.seo_description, true);
+      setMetaTag("twitter:description", profile.seo_description);
+    }
+    if (profile.og_image_url) {
+      setMetaTag("og:image", profile.og_image_url, true);
+      setMetaTag("twitter:image", profile.og_image_url);
+    }
+    if (profile.twitter_handle) {
+      const handle = profile.twitter_handle.startsWith("@")
+        ? profile.twitter_handle
+        : `@${profile.twitter_handle}`;
+      setMetaTag("twitter:site", handle);
+    }
+    setMetaTag("og:url", window.location.href, true);
+    setMetaTag("og:type", "website", true);
+    setMetaTag("twitter:card", "summary_large_image");
+  }, [profile, applyMeta]);
 
-          // Apply SEO / Open Graph meta tags dynamically
-          if (data.seo_title) {
-            document.title = data.seo_title;
-            setMetaTag("og:title", data.seo_title, true);
-            setMetaTag("twitter:title", data.seo_title);
-          }
-          if (data.seo_description) {
-            setMetaTag("description", data.seo_description);
-            setMetaTag("og:description", data.seo_description, true);
-            setMetaTag("twitter:description", data.seo_description);
-          }
-          if (data.og_image_url) {
-            setMetaTag("og:image", data.og_image_url, true);
-            setMetaTag("twitter:image", data.og_image_url);
-          }
-          if (data.twitter_handle) {
-            const handle = data.twitter_handle.startsWith("@")
-              ? data.twitter_handle
-              : `@${data.twitter_handle}`;
-            setMetaTag("twitter:site", handle);
-          }
-          setMetaTag("og:url", window.location.href, true);
-          setMetaTag("og:type", "website", true);
-          setMetaTag("twitter:card", "summary_large_image");
-        }
-      });
-
-    // Fetch the first verified site (for AI content context)
-    db
-      .from("sites")
-      .select("id")
-      .eq("verified", true)
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.id) setSiteId(data.id);
-      });
-  }, []);
-
-  // Derived values with fallbacks
   const displayName = profile?.display_name || "Tanya Williams";
   const tagline = profile?.tagline || "Founder & AI Consultant";
   const bio = profile?.bio || "No-code AI agent training for social work professionals.\nGrounded in the NASW Code of Ethics.";
@@ -101,7 +72,6 @@ const HeroSection = () => {
   const socialLinks = profile?.social_links || [];
   const cardLayout: CardLayout = profile?.card_layout || "classic";
 
-  // Drag-based slider
   const dragX = useMotionValue(0);
   const DRAG_THRESHOLD = -80;
 
@@ -114,12 +84,14 @@ const HeroSection = () => {
     dragX.set(0);
   };
 
-  const openExplore = useCallback(() => { setIsCtaOpen(false); setIsExploreOpen(true); }, []);
+  const openExplore = useCallback(() => { setIsCtaOpen(false); setIsScanOpen(false); setIsExploreOpen(true); }, []);
   const closeExplore = useCallback(() => setIsExploreOpen(false), []);
-  const openCta = useCallback(() => { setIsExploreOpen(false); setIsCtaOpen(true); }, []);
+  const openCta = useCallback(() => { setIsExploreOpen(false); setIsScanOpen(false); setIsCtaOpen(true); }, []);
   const closeCta = useCallback(() => setIsCtaOpen(false), []);
+  const openScan = useCallback(() => { setIsExploreOpen(false); setIsCtaOpen(false); setIsScanOpen(true); }, []);
+  const closeScan = useCallback(() => setIsScanOpen(false), []);
 
-  const isExpanded = isExploreOpen || isCtaOpen;
+  const isExpanded = isExploreOpen || isCtaOpen || isScanOpen;
 
   return (
     <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4" aria-label="Business card">
@@ -128,17 +100,12 @@ const HeroSection = () => {
         transition={{ type: "spring", damping: 32, stiffness: 220 }}
         role="region"
         aria-label={`${displayName} — ${tagline}`}
-        className={`relative w-full rounded-3xl border border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden ${isExpanded ? "max-w-5xl" : "max-w-lg"
+        className={`relative w-full rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden ${isExpanded ? "max-w-5xl" : "max-w-lg"
           }`}
-        style={{ minHeight: isExpanded ? "80vh" : "auto" }}
       >
-        {/* ── Decorative background graphics ── */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-          {/* Warm radial glow top-right */}
-          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/10 blur-3xl" />
-          {/* Accent circle bottom-left */}
-          <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-amber-500/8 blur-2xl" />
-          {/* Subtle grid pattern */}
+          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-amber-500/5 blur-2xl" />
           <div
             className="absolute inset-0 opacity-[0.03]"
             style={{
@@ -146,12 +113,10 @@ const HeroSection = () => {
               backgroundSize: '32px 32px',
             }}
           />
-          {/* Diagonal light streak */}
           <div className="absolute top-1/3 -left-20 w-[140%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent rotate-[-8deg]" />
         </div>
 
-        <div className={`relative z-10 flex h-full ${isExpanded ? "flex-row" : "flex-col"}`}>
-          {/* ── Business Card Side ── */}
+        <div className="relative z-10 flex flex-row h-full">
           <motion.div
             layout
             drag={!isExpanded ? "x" : false}
@@ -160,26 +125,23 @@ const HeroSection = () => {
             onDragEnd={handleDragEnd}
             style={{ x: !isExpanded ? dragX : 0 }}
             className={`flex flex-col cursor-grab active:cursor-grabbing ${isExpanded
-              ? "w-80 flex-shrink-0 border-r border-border/30 px-6 py-8 items-center"
-              : `px-8 pt-12 pb-10 w-full ${cardLayout === "classic" ? "items-center" : ""}`
+              ? "w-80 flex-shrink-0 border-r border-border/30 px-6 py-8 items-center justify-center"
+              : `px-6 pt-8 pb-8 w-full ${cardLayout === "classic" ? "items-center" : ""}`
               }`}
           >
-            {/* ── CLASSIC LAYOUT: Centered, photo on top ── */}
             {(cardLayout === "classic" || isExpanded) && (
               <div className={`flex flex-col items-center w-full ${isExpanded ? "" : ""}`}>
-                {/* Brand name */}
                 <motion.h1
                   layout="position"
-                  className={`font-display font-black text-gradient-amber tracking-tight text-center ${isExpanded ? "text-xl mb-4" : "text-5xl mb-8"
+                  className={`font-display font-semibold text-gradient-amber tracking-tight text-center ${isExpanded ? "text-lg mb-3" : "text-3xl mb-6"
                     } transition-[font-size] duration-300`}
                 >
                   60 Watts of Clarity
                 </motion.h1>
 
-                {/* Photo */}
                 <motion.div
                   layout="position"
-                  className={`rounded-full overflow-hidden glow-amber border-2 border-primary/30 ${isExpanded ? "w-20 h-20 mb-3" : "w-32 h-32 mb-6"
+                  className={`rounded-full overflow-hidden border border-primary/40 ${isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4"
                     } transition-all duration-300`}
                 >
                   <img
@@ -190,9 +152,8 @@ const HeroSection = () => {
                   />
                 </motion.div>
 
-                {/* Name & info */}
                 <div className="text-center">
-                  <p className={`font-sans font-semibold text-primary ${isExpanded ? "text-lg" : "text-4xl"}`}>
+                  <p className={`font-sans font-semibold text-primary ${isExpanded ? "text-lg" : "text-2xl"}`}>
                     {displayName}
                   </p>
                   <p className={`mt-2 font-sans text-amber-200 ${isExpanded ? "text-sm" : "text-base"}`}>{tagline}</p>
@@ -206,25 +167,23 @@ const HeroSection = () => {
                   </p>
                 </div>
 
-                {/* Social icons */}
-                <div className={isExpanded ? "mt-4" : "mt-6"}>
-                  <SocialLinks links={socialLinks} compact={isExpanded} />
-                </div>
+                {socialLinks && socialLinks.length > 0 && (
+                  <div className={isExpanded ? "mt-4" : "mt-6"}>
+                    <SocialLinks links={socialLinks} compact={isExpanded} />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── BOLD LAYOUT: Side-by-side, left-aligned ── */}
             {cardLayout === "bold" && !isExpanded && (
               <div className="flex flex-col w-full">
-                {/* Brand name — full width */}
                 <motion.h1
                   layout="position"
-                  className="font-display font-black text-gradient-amber tracking-tight text-4xl mb-8"
+                  className="font-display font-semibold text-gradient-amber tracking-tight text-2xl mb-6"
                 >
                   60 Watts of Clarity
                 </motion.h1>
 
-                {/* Photo + info side by side */}
                 <div className="flex items-start gap-6 mb-6">
                   <motion.div
                     layout="position"
@@ -239,7 +198,7 @@ const HeroSection = () => {
                   </motion.div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="font-sans font-bold text-primary text-3xl leading-tight">
+                    <p className="font-sans font-bold text-primary text-2xl leading-tight">
                       {displayName}
                     </p>
                     <p className="mt-1 font-sans text-amber-200 text-base">{tagline}</p>
@@ -254,15 +213,15 @@ const HeroSection = () => {
                   </div>
                 </div>
 
-                {/* Social icons — left aligned */}
-                <div className="mt-2">
-                  <SocialLinks links={socialLinks} />
-                </div>
+                {socialLinks && socialLinks.length > 0 && (
+                  <div className="mt-2">
+                    <SocialLinks links={socialLinks} />
+                  </div>
+                )}
               </div>
             )}
 
-            {/* CTAs */}
-            <div className={`flex gap-3 ${isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"}`}>
+            <div className={`flex gap-3 flex-wrap ${isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"}`}>
               <button
                 onClick={openExplore}
                 className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-base glow-amber hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 min-w-[150px]"
@@ -289,9 +248,26 @@ const HeroSection = () => {
                   {ctaLabel}
                 </a>
               )}
+              {showScanLink && (
+                <button
+                  onClick={openScan}
+                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  aria-label="Show QR code to scan"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <line x1="14" y1="14" x2="14" y2="21" />
+                    <line x1="14" y1="14" x2="21" y2="14" />
+                    <line x1="18" y1="18" x2="21" y2="18" />
+                    <line x1="18" y1="18" x2="18" y2="21" />
+                  </svg>
+                  Scan
+                </button>
+              )}
             </div>
 
-            {/* Screen-reader-only shortcut for assistive tech */}
             {!isExpanded && (
               <button
                 type="button"
@@ -304,8 +280,7 @@ const HeroSection = () => {
 
           </motion.div>
 
-          {/* ── Explore Panel ── */}
-          <AnimatePresence>
+          <AnimatePresence mode="popLayout">
             {isExploreOpen && (
               <motion.div
                 initial={{ opacity: 0, width: 0 }}
@@ -316,7 +291,6 @@ const HeroSection = () => {
                 role="region"
                 aria-label="Explore panel"
               >
-                {/* Back / close */}
                 <button
                   onClick={closeExplore}
                   className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -325,13 +299,12 @@ const HeroSection = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </button>
 
-                <ExplorePanel siteId={siteId} onClose={closeExplore} />
+                <ExplorePanel siteId={siteId} profileId={profileId} onClose={closeExplore} />
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* ── CTA Embed Panel ── */}
-          <AnimatePresence>
+          <AnimatePresence mode="popLayout">
             {isCtaOpen && (
               <motion.div
                 initial={{ opacity: 0, width: 0 }}
@@ -342,7 +315,6 @@ const HeroSection = () => {
                 role="region"
                 aria-label="Booking panel"
               >
-                {/* Close button */}
                 <button
                   onClick={closeCta}
                   className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -358,10 +330,36 @@ const HeroSection = () => {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <AnimatePresence mode="popLayout">
+            {isScanOpen && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "100%" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ type: "spring", damping: 32, stiffness: 220 }}
+                className="flex-1 min-w-0 relative flex flex-col items-center justify-center p-8"
+                role="region"
+                aria-label="QR code"
+              >
+                <button
+                  onClick={closeScan}
+                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Close QR"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <p className="text-sm text-muted-foreground mb-4">Scan to share this card</p>
+                <div className="bg-white p-4 rounded-2xl">
+                  <QRCodeSVG value={typeof window !== "undefined" ? window.location.href : ""} size={220} level="M" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </section>
   );
 };
 
-export default HeroSection;
+export default CardView;

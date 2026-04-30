@@ -1,26 +1,15 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
-import { apiClient as db } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
-import { applyTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
-import { Loader2, Globe, UserPlus, Check, Clock, ExternalLink } from "lucide-react";
+import { Loader2, UserPlus, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { SocialLink } from "@/types";
+import CardView from "@/components/card/CardView";
+import type { Profile } from "@/types";
 
-interface CardProfile {
-    display_name: string;
-    tagline: string;
-    bio: string;
-    avatar_url: string;
-    cta_url: string;
-    cta_label: string;
-    social_links: SocialLink[];
-    card_layout: string;
-    theme: string;
-    accent_color: string;
-    slug: string;
+interface CardApiResponse extends Partial<Profile> {
+    user_id?: string;
+    site_id?: string | null;
 }
 
 type ConnectState = "idle" | "sending" | "sent" | "already" | "error";
@@ -29,7 +18,9 @@ const CardShare = () => {
     const { slug } = useParams<{ slug: string }>();
     const { user } = useAuth();
     const { toast } = useToast();
-    const [profile, setProfile] = useState<CardProfile | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
+    const [profileId, setProfileId] = useState<string | null>(null);
+    const [siteId, setSiteId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [notFound, setNotFound] = useState(false);
     const [connectState, setConnectState] = useState<ConnectState>("idle");
@@ -40,9 +31,30 @@ const CardShare = () => {
         fetch(`${import.meta.env.VITE_API_URL || "/api"}/card/${encodeURIComponent(slug)}`)
             .then(async (res) => {
                 if (!res.ok) { setNotFound(true); return; }
-                const data = await res.json();
-                setProfile(data);
-                applyTheme(data.theme || "dark", data.accent_color || "amber");
+                const data: CardApiResponse = await res.json();
+                setProfile({
+                    display_name: data.display_name || "",
+                    tagline: data.tagline || "",
+                    bio: data.bio || "",
+                    avatar_url: data.avatar_url || "",
+                    cta_url: data.cta_url || "",
+                    cta_label: data.cta_label || "Get in Touch",
+                    cta_embed: data.cta_embed || "",
+                    social_links: Array.isArray(data.social_links) ? data.social_links : [],
+                    card_layout: data.card_layout === "bold" ? "bold" : "classic",
+                    theme: data.theme || "dark",
+                    accent_color: data.accent_color || "amber",
+                    seo_title: data.seo_title || "",
+                    seo_description: data.seo_description || "",
+                    og_image_url: data.og_image_url || "",
+                    twitter_handle: data.twitter_handle || "",
+                    robots_txt: (data as any).robots_txt,
+                    slug: data.slug || "",
+                    ai_query_enabled: !!data.ai_query_enabled,
+                    show_qr_scan_link: !!(data as any).show_qr_scan_link,
+                });
+                setProfileId(data.user_id ?? null);
+                setSiteId(data.site_id ?? null);
             })
             .catch(() => setNotFound(true))
             .finally(() => setLoading(false));
@@ -105,76 +117,17 @@ const CardShare = () => {
         );
     }
 
-    const cardUrl = window.location.href;
-
     return (
-        <div className="min-h-screen bg-gradient-dark flex items-center justify-center p-4">
-            <div className="w-full max-w-md space-y-6">
-                {/* Card */}
-                <div className="rounded-2xl border border-border/30 bg-card/30 backdrop-blur-lg p-8 text-center space-y-4">
-                    {/* Avatar */}
-                    {profile.avatar_url ? (
-                        <img
-                            src={profile.avatar_url}
-                            alt={profile.display_name}
-                            className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-primary/30"
-                        />
-                    ) : (
-                        <div className="w-24 h-24 rounded-full mx-auto bg-primary/20 flex items-center justify-center">
-                            <span className="text-3xl font-bold text-primary">
-                                {profile.display_name?.charAt(0)?.toUpperCase() || "?"}
-                            </span>
-                        </div>
-                    )}
+        <div className="min-h-screen bg-gradient-dark">
+            <CardView
+                profile={profile}
+                siteId={siteId}
+                profileId={profileId}
+                showScanLink={!!profile.show_qr_scan_link}
+            />
 
-                    {/* Name + tagline */}
-                    <div>
-                        <h1 className="text-2xl font-bold text-foreground">{profile.display_name}</h1>
-                        {profile.tagline && (
-                            <p className="text-sm text-muted-foreground mt-1">{profile.tagline}</p>
-                        )}
-                    </div>
-
-                    {/* Bio */}
-                    {profile.bio && (
-                        <p className="text-sm text-muted-foreground leading-relaxed">{profile.bio}</p>
-                    )}
-
-                    {/* CTA */}
-                    {profile.cta_url && (
-                        <a
-                            href={profile.cta_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5"
-                        >
-                            <Button className="w-full">
-                                <ExternalLink className="w-4 h-4 mr-1" />
-                                {profile.cta_label || "Get in Touch"}
-                            </Button>
-                        </a>
-                    )}
-
-                    {/* Social links */}
-                    {profile.social_links?.length > 0 && (
-                        <div className="flex justify-center gap-3 pt-2">
-                            {profile.social_links.map((link, i) => (
-                                <a
-                                    key={i}
-                                    href={link.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                                >
-                                    <Globe className="w-3 h-3" />
-                                    {link.platform}
-                                </a>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Connect section */}
+            {/* Connect / Sign-in prompt below the card */}
+            <div className="max-w-lg mx-auto px-4 pb-12 -mt-4">
                 <div className="rounded-2xl border border-border/30 bg-card/30 backdrop-blur-lg p-6 space-y-4">
                     {user ? (
                         <>
@@ -226,16 +179,7 @@ const CardShare = () => {
                     )}
                 </div>
 
-                {/* QR Code */}
-                <div className="rounded-2xl border border-border/30 bg-card/30 backdrop-blur-lg p-6 flex flex-col items-center space-y-3">
-                    <p className="text-xs text-muted-foreground">Scan to view this card</p>
-                    <div className="bg-white p-3 rounded-xl">
-                        <QRCodeSVG value={cardUrl} size={160} level="M" />
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <p className="text-center text-xs text-muted-foreground/50">
+                <p className="text-center text-xs text-muted-foreground/50 mt-4">
                     Powered by <Link to="/" className="hover:text-primary transition-colors">AI Vibe Card</Link>
                 </p>
             </div>

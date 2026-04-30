@@ -25,22 +25,15 @@ const ICON_MAP: Record<string, LucideIcon> = {
   pinterest: Pin,
 };
 
-const DEFAULT_SOCIALS: SocialLink[] = [
-  { platform: "phone", url: "tel:+15551234567" },
-  { platform: "email", url: "mailto:hello@60wattsofclarity.com" },
-  { platform: "linkedin", url: "https://linkedin.com" },
-  { platform: "instagram", url: "https://instagram.com" },
-  { platform: "twitter", url: "https://twitter.com" },
-  { platform: "facebook", url: "https://facebook.com" },
-];
-
 interface SocialLinksProps {
   links?: SocialLink[];
   compact?: boolean;
 }
 
 const SocialLinks = ({ links, compact = false }: SocialLinksProps) => {
-  const socials = links && links.length > 0 ? links : DEFAULT_SOCIALS;
+  const socials = links && links.length > 0 ? links : [];
+
+  if (socials.length === 0) return null;
 
   return (
     <motion.div

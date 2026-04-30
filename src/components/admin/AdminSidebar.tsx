@@ -15,7 +15,7 @@ import {
 
 export type AdminSection =
   | "import"
-  | "content"
+  | "kb"
   | "ai"
   | "cards"
   | "api"
@@ -24,7 +24,7 @@ export type AdminSection =
 
 const mainItems = [
   { title: "Site Import", value: "import" as AdminSection, icon: Globe },
-  { title: "Content", value: "content" as AdminSection, icon: FileText },
+  { title: "Knowledge Base", value: "kb" as AdminSection, icon: FileText },
   { title: "AI Training", value: "ai" as AdminSection, icon: Brain },
   { title: "Connections", value: "cards" as AdminSection, icon: CreditCard },
 ];
