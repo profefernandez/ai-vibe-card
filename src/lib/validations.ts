@@ -28,9 +28,18 @@ export const registerSchema = z.object({
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
+// Social link URL must start with a safe protocol.
+// Blocks javascript:, data:, vbscript: and any other unlisted scheme
+// that could be exploited as an XSS vector via href injection.
 export const socialLinkSchema = z.object({
     platform: z.string().min(1),
-    url: z.string().min(1, "URL is required"),
+    url: z
+        .string()
+        .min(1, "URL is required")
+        .refine(
+            (val) => /^(https?:\/\/|mailto:|tel:)/.test(val),
+            "URL must start with https://, mailto:, or tel:"
+        ),
 });
 
 export const profileSchema = z.object({
@@ -40,9 +49,12 @@ export const profileSchema = z.object({
     avatar_url: z.string().url().optional().or(z.literal("")),
     cta_url: z.string().url().optional().or(z.literal("")),
     cta_label: z.string().max(50).optional(),
-    cta_embed: z.string().optional(),
+    // Enforce a reasonable length so a 1 MB embed string never reaches the DB.
+    cta_embed: z.string().max(5000).optional(),
     social_links: z.array(socialLinkSchema).optional(),
     card_layout: z.enum(["classic", "bold"]).optional(),
+    // Brand heading shown at the top of the card.
+    site_name: z.string().max(100).optional(),
 });
 
 // ─── Site Import ──────────────────────────────────────────────────────────────
