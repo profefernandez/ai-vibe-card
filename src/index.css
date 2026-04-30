@@ -49,7 +49,7 @@
     --sidebar-ring: 38 95% 52%;
   }
 
-  /* Light theme */
+  /* Light theme — applied via .light class or system preference */
   .light {
     --background: 0 0% 100%;
     --foreground: 222 20% 10%;
@@ -60,7 +60,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 20% 10%;
 
-    --primary: 38 95% 48%;
+    --primary: 38 95% 42%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 222 10% 93%;
@@ -69,7 +69,7 @@
     --muted: 222 10% 90%;
     --muted-foreground: 222 14% 32%;
 
-    --accent: 38 80% 44%;
+    --accent: 38 80% 38%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
@@ -77,19 +77,46 @@
 
     --border: 222 10% 86%;
     --input: 222 10% 86%;
-    --ring: 38 95% 48%;
+    --ring: 38 95% 42%;
 
-    --amber-glow: 38 95% 48%;
+    --amber-glow: 38 95% 42%;
     --amber-soft: 38 40% 80%;
 
     --sidebar-background: 0 0% 97%;
     --sidebar-foreground: 222 20% 10%;
-    --sidebar-primary: 38 95% 48%;
+    --sidebar-primary: 38 95% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 222 10% 93%;
     --sidebar-accent-foreground: 222 20% 10%;
     --sidebar-border: 222 10% 86%;
-    --sidebar-ring: 38 95% 48%;
+    --sidebar-ring: 38 95% 42%;
+  }
+
+  /* Respect system light-mode preference when no explicit class is set */
+  @media (prefers-color-scheme: light) {
+    :root:not(.dark) {
+      --background: 0 0% 100%;
+      --foreground: 222 20% 10%;
+      --card: 0 0% 98%;
+      --card-foreground: 222 20% 10%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 222 20% 10%;
+      --primary: 38 95% 42%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 222 10% 93%;
+      --secondary-foreground: 222 15% 25%;
+      --muted: 222 10% 90%;
+      --muted-foreground: 222 14% 32%;
+      --accent: 38 80% 38%;
+      --accent-foreground: 0 0% 100%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 0 0% 100%;
+      --border: 222 10% 86%;
+      --input: 222 10% 86%;
+      --ring: 38 95% 42%;
+      --amber-glow: 38 95% 42%;
+      --amber-soft: 38 40% 80%;
+    }
   }
 }
 
@@ -98,9 +125,8 @@
     @apply border-border;
   }
 
-  /* Bump the root size so all rem-based sizes
-     (text-sm, text-base, etc.) scale up proportionally. */
   html {
+    /* 19px root keeps rem-based sizes comfortable on high-DPI displays */
     font-size: 19px;
   }
 
@@ -121,15 +147,15 @@
     line-height: 1.25;
   }
 
-  /* Bump the smallest text sizes so micro-copy stays readable. */
+  /* Keep tiny labels readable — floor at ~14px @ 19px root */
   .text-xs {
-    font-size: 0.95rem !important; /* ~18px @ 19px root */
+    font-size: 0.75rem !important;
     line-height: 1.4 !important;
   }
   [class*="text-[10px]"],
   [class*="text-[11px]"],
   [class*="text-[12px]"] {
-    font-size: 0.85rem !important; /* ~16px @ 19px root */
+    font-size: 0.7rem !important;
     line-height: 1.35 !important;
   }
 }
@@ -160,7 +186,6 @@
     border-image: linear-gradient(135deg, hsl(38 95% 52% / 0.4), hsl(38 95% 52% / 0.1)) 1;
   }
 
-  /* Subtle card elevation for B2B depth */
   .card-elevated {
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.25);
   }

@@ -41,6 +41,8 @@ const HeroSection = () => {
         robots_txt: data.robots_txt,
         slug: data.slug || "",
         ai_query_enabled: !!data.ai_query_enabled,
+        show_qr_scan_link: !!data.show_qr_scan_link,
+        site_name: data.site_name || "",
       });
       setProfileId(data.user_id ?? null);
     };
@@ -63,14 +65,12 @@ const HeroSection = () => {
     return () => { cancelled = true; };
   }, [profileId]);
 
-  const showScanLink = !!(profile as any)?.show_qr_scan_link;
-
   return (
     <CardView
       profile={profile}
       siteId={siteId}
       profileId={profileId}
-      showScanLink={showScanLink}
+      showScanLink={profile?.show_qr_scan_link ?? false}
     />
   );
 };

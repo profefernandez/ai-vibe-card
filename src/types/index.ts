@@ -44,6 +44,8 @@ export interface Profile {
     slug: string;
     ai_query_enabled: boolean;
     show_qr_scan_link?: boolean;
+    /** Brand / company name shown at the top of the card (e.g. "60 Watts of Clarity") */
+    site_name?: string;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────

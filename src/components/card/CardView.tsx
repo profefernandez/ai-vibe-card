@@ -71,11 +71,13 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const ctaEmbed = profile?.cta_embed || "";
   const socialLinks = profile?.social_links || [];
   const cardLayout: CardLayout = profile?.card_layout || "classic";
+  // Brand name — editable via profile.site_name, falls back to a sensible default.
+  const siteName = profile?.site_name || "60 Watts of Clarity";
 
   const dragX = useMotionValue(0);
   const DRAG_THRESHOLD = -80;
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
+  const handleDragEnd = (_event: PointerEvent, info: PanInfo) => {
     if (info.offset.x < DRAG_THRESHOLD) {
       setIsExploreOpen(true);
     } else if (info.offset.x > -DRAG_THRESHOLD) {
@@ -94,14 +96,15 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const isExpanded = isExploreOpen || isCtaOpen || isScanOpen;
 
   return (
-    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4" aria-label="Business card">
+    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8" aria-label="Business card">
       <motion.div
         layout
         transition={{ type: "spring", damping: 32, stiffness: 220 }}
         role="region"
         aria-label={`${displayName} — ${tagline}`}
-        className={`relative w-full rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden ${isExpanded ? "max-w-5xl" : "max-w-lg"
-          }`}
+        className={`relative w-full rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden ${
+          isExpanded ? "max-w-5xl" : "max-w-lg"
+        }`}
       >
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
           <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/5 blur-3xl" />
@@ -116,7 +119,8 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <div className="absolute top-1/3 -left-20 w-[140%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent rotate-[-8deg]" />
         </div>
 
-        <div className="relative z-10 flex flex-row h-full">
+        {/* On mobile, expanded panels stack vertically. On md+ they sit side-by-side. */}
+        <div className="relative z-10 flex flex-col md:flex-row h-full">
           <motion.div
             layout
             drag={!isExpanded ? "x" : false}
@@ -124,30 +128,36 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             dragElastic={0.15}
             onDragEnd={handleDragEnd}
             style={{ x: !isExpanded ? dragX : 0 }}
-            className={`flex flex-col cursor-grab active:cursor-grabbing ${isExpanded
-              ? "w-80 flex-shrink-0 border-r border-border/30 px-6 py-8 items-center justify-center"
-              : `px-6 pt-8 pb-8 w-full ${cardLayout === "classic" ? "items-center" : ""}`
-              }`}
+            className={`flex flex-col cursor-grab active:cursor-grabbing ${
+              isExpanded
+                ? "md:w-80 w-full flex-shrink-0 md:border-r border-b md:border-b-0 border-border/30 px-6 py-8 items-center justify-center"
+                : `px-6 pt-8 pb-8 w-full ${cardLayout === "classic" ? "items-center" : ""}`
+            }`}
           >
             {(cardLayout === "classic" || isExpanded) && (
-              <div className={`flex flex-col items-center w-full ${isExpanded ? "" : ""}`}>
+              <div className={`flex flex-col items-center w-full`}>
                 <motion.h1
                   layout="position"
-                  className={`font-display font-semibold text-gradient-amber tracking-tight text-center ${isExpanded ? "text-lg mb-3" : "text-3xl mb-6"
-                    } transition-[font-size] duration-300`}
+                  className={`font-display font-semibold text-gradient-amber tracking-tight text-center ${
+                    isExpanded ? "text-lg mb-3" : "text-3xl mb-6"
+                  } transition-[font-size] duration-300`}
                 >
-                  60 Watts of Clarity
+                  {siteName}
                 </motion.h1>
 
                 <motion.div
                   layout="position"
-                  className={`rounded-full overflow-hidden border border-primary/40 ${isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4"
-                    } transition-all duration-300`}
+                  className={`rounded-full overflow-hidden border border-primary/40 ${
+                    isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4"
+                  } transition-all duration-300`}
                 >
                   <img
                     src={avatarUrl}
                     alt={`${displayName} - ${tagline}`}
                     className="w-full h-full object-cover"
+                    width={96}
+                    height={96}
+                    loading="eager"
                     onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
                   />
                 </motion.div>
@@ -181,7 +191,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   layout="position"
                   className="font-display font-semibold text-gradient-amber tracking-tight text-2xl mb-6"
                 >
-                  60 Watts of Clarity
+                  {siteName}
                 </motion.h1>
 
                 <div className="flex items-start gap-6 mb-6">
@@ -193,6 +203,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                       src={avatarUrl}
                       alt={`${displayName} - ${tagline}`}
                       className="w-full h-full object-cover"
+                      width={112}
+                      height={112}
+                      loading="eager"
                       onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
                     />
                   </motion.div>
@@ -221,7 +234,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               </div>
             )}
 
-            <div className={`flex gap-3 flex-wrap ${isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"}`}>
+            <div className={`flex gap-3 flex-wrap ${
+              isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"
+            }`}>
               <button
                 onClick={openExplore}
                 className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-base glow-amber hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 min-w-[150px]"
@@ -283,23 +298,31 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <AnimatePresence mode="popLayout">
             {isExploreOpen && (
               <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "100%" }}
-                exit={{ opacity: 0, width: 0 }}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="flex-1 min-w-0 relative"
+                className="flex-1 min-w-0 relative md:[height:unset] md:[animation:none]"
+                style={{}}
                 role="region"
                 aria-label="Explore panel"
               >
-                <button
-                  onClick={closeExplore}
-                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close explore"
+                {/* On md+ use width animation, on mobile use height */}
+                <motion.div
+                  className="h-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-
-                <ExplorePanel siteId={siteId} profileId={profileId} onClose={closeExplore} />
+                  <button
+                    onClick={closeExplore}
+                    className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close explore"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <ExplorePanel siteId={siteId} profileId={profileId} onClose={closeExplore} />
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -307,9 +330,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <AnimatePresence mode="popLayout">
             {isCtaOpen && (
               <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "100%" }}
-                exit={{ opacity: 0, width: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
                 className="flex-1 min-w-0 relative flex flex-col"
                 role="region"
@@ -334,9 +357,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <AnimatePresence mode="popLayout">
             {isScanOpen && (
               <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "100%" }}
-                exit={{ opacity: 0, width: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
                 className="flex-1 min-w-0 relative flex flex-col items-center justify-center p-8"
                 role="region"
