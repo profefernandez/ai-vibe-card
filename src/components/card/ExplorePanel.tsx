@@ -9,11 +9,11 @@ interface ExplorePanelProps {
   profileId?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
-  /** Called each time a new AI answer lands — used by the desktop layout to
-   *  advance the PhotoStage centre column in sync with the chat. */
+  /** Called each time a new AI answer lands — used by the desktop layout
+   *  to advance the PhotoStage carousel in the centre column. */
   onAnswer?: () => void;
-  /** When true the polaroid banner at the top is suppressed — the desktop
-   *  layout shows photos in the dedicated centre column instead. */
+  /** When true the top polaroid banner is suppressed — the desktop layout
+   *  renders photos in its own dedicated centre column instead. */
   hideBanner?: boolean;
 }
 
@@ -22,7 +22,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 type FeedbackRating = "up" | "down";
 type FeedbackStatus = "idle" | "pending-comment" | "submitting" | "done";
 
-// ── SVG icons ────────────────────────────────────────────────────────────────────────────────
+// ── SVG icons ─────────────────────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="8" />
@@ -109,7 +109,8 @@ const ExplorePanel = ({
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
 
-  // Banner slideshow — suppressed on desktop via hideBanner prop.
+  // Banner slideshow — suppressed when hideBanner=true (desktop centre column
+  // owns photo display instead).
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [kbIndex, setKbIndex] = useState(0);
 
@@ -118,7 +119,7 @@ const ExplorePanel = ({
     void db.kbImages.listPublic(profileId).then(({ data }) => setKbImages(data));
   }, [profileId]);
 
-  // Advance the slide each time a new answer lands (mobile banner only).
+  // Advance the slide each time a new answer lands.
   useEffect(() => {
     if (!answer || kbImages.length === 0) return;
     setKbIndex((i) => (i + 1) % kbImages.length);
@@ -136,9 +137,7 @@ const ExplorePanel = ({
   const handleRate = (rating: FeedbackRating) => {
     if (feedbackStatus !== "idle") return;
     if (!feedbackToken) return;
-
     setFeedbackRating(rating);
-
     if (rating === "up") {
       setFeedbackStatus("done");
       void postFeedback({
@@ -155,10 +154,7 @@ const ExplorePanel = ({
   };
 
   const handleSubmitComment = () => {
-    if (!feedbackRating || !feedbackToken) {
-      setFeedbackStatus("done");
-      return;
-    }
+    if (!feedbackRating || !feedbackToken) { setFeedbackStatus("done"); return; }
     const trimmed = feedbackComment.trim();
     setFeedbackStatus("submitting");
     void postFeedback({
@@ -208,7 +204,7 @@ const ExplorePanel = ({
 
       if (result.response) {
         setAnswer(result.response);
-        // Notify parent (CardView) so the desktop PhotoStage advances.
+        // ← Notify CardView so the desktop PhotoStage advances to the next image.
         onAnswer?.();
       } else {
         setNoContent(true);
@@ -223,11 +219,10 @@ const ExplorePanel = ({
   return (
     <div className="flex flex-col h-full bg-background">
 
-      {/*
-        Polaroid banner — shown on mobile where there is no dedicated centre
-        column. Suppressed on desktop (hideBanner=true) because PhotoStage
-        takes over that responsibility in the bento grid.
-      */}
+      {/* ── Polaroid banner (mobile only / hideBanner=false) ──────────────────
+          On desktop the PhotoStage component in the centre bento column
+          handles photo display, so we suppress the banner there.
+      ────────────────────────────────────────────────────────────────── */}
       {!hideBanner && currentBanner && (
         <div className="px-6 pt-6 pb-2 flex flex-col items-center">
           <div className="relative w-full max-w-sm">
@@ -254,7 +249,7 @@ const ExplorePanel = ({
         </div>
       )}
 
-      {/* Header */}
+      {/* ── Header / search ────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
           Explore
@@ -263,9 +258,7 @@ const ExplorePanel = ({
           onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
           className="relative flex items-center"
         >
-          <span className="absolute left-3.5 text-muted-foreground/50">
-            <SearchIcon />
-          </span>
+          <span className="absolute left-3.5 text-muted-foreground/50"><SearchIcon /></span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -284,22 +277,13 @@ const ExplorePanel = ({
         </form>
       </div>
 
-      {/* Content area */}
+      {/* ── Content ────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <AnimatePresence mode="wait">
 
-          {/* Suggestions */}
           {!activeQuery && (
-            <motion.div
-              key="suggestions"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-5"
-            >
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">
-                Suggested questions
-              </p>
+            <motion.div key="suggestions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">Suggested questions</p>
               <div className="space-y-2">
                 {EXPLORE_SUGGESTIONS.map((s) => (
                   <button
@@ -307,54 +291,32 @@ const ExplorePanel = ({
                     onClick={() => handleSearch(s)}
                     className="w-full text-left group flex items-center justify-between px-4 py-3 rounded-xl border border-border/30 bg-secondary/30 hover:bg-primary/5 hover:border-primary/25 transition-all duration-200"
                   >
-                    <span className="text-sm text-foreground/75 group-hover:text-foreground transition-colors">
-                      {s}
-                    </span>
-                    <span className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors">
-                      <ArrowIcon />
-                    </span>
+                    <span className="text-sm text-foreground/75 group-hover:text-foreground transition-colors">{s}</span>
+                    <span className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors"><ArrowIcon /></span>
                   </button>
                 ))}
               </div>
               <div className="pt-4 border-t border-border/20">
-                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
-                  Powered by AI \u00b7 Grounded in the NASW Code of Ethics
-                </p>
+                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">Powered by AI \u00b7 Grounded in the NASW Code of Ethics</p>
               </div>
             </motion.div>
           )}
 
-          {/* Loading */}
           {activeQuery && loading && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-16 gap-3"
-            >
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-16 gap-3">
               <SpinnerIcon />
               <p className="text-sm text-muted-foreground">Searching\u2026</p>
             </motion.div>
           )}
 
-          {/* Answer */}
           {activeQuery && !loading && answer && (
-            <motion.div
-              key="answer"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
-            >
+            <motion.div key="answer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setActiveQuery(null); setAnswer(null); }}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
                   Back
                 </button>
               </div>
@@ -363,88 +325,41 @@ const ExplorePanel = ({
                 <div className="prose prose-sm prose-invert max-w-none text-foreground/90 leading-relaxed">
                   <ReactMarkdown>{answer}</ReactMarkdown>
                 </div>
-
-                {/* Feedback */}
                 <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-2">
                   {feedbackStatus === "idle" && (
                     <>
-                      <button type="button" onClick={() => handleRate("up")} aria-label="Rate response helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1">
-                        <ThumbsUpIcon />
-                      </button>
-                      <button type="button" onClick={() => handleRate("down")} aria-label="Rate response not helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1">
-                        <ThumbsDownIcon />
-                      </button>
+                      <button type="button" onClick={() => handleRate("up")} aria-label="Rate response helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1"><ThumbsUpIcon /></button>
+                      <button type="button" onClick={() => handleRate("down")} aria-label="Rate response not helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"><ThumbsDownIcon /></button>
                     </>
                   )}
-
                   {feedbackStatus === "pending-comment" && (
                     <div className="w-full flex flex-col gap-2">
                       <div className="flex items-center gap-2 text-muted-foreground/60">
                         {feedbackRating === "up" ? <ThumbsUpIcon /> : <ThumbsDownIcon />}
                         <span className="text-[11px]">Thanks for the feedback.</span>
                       </div>
-                      <textarea
-                        value={feedbackComment}
-                        onChange={(e) => setFeedbackComment(e.target.value)}
-                        placeholder="Anything we should know? (optional)"
-                        maxLength={2000}
-                        rows={2}
-                        className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
+                      <textarea value={feedbackComment} onChange={(e) => setFeedbackComment(e.target.value)} placeholder="Anything we should know? (optional)" maxLength={2000} rows={2} className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
                       <div className="flex justify-end">
-                        <button type="button" onClick={handleSubmitComment} className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
-                          Send
-                        </button>
+                        <button type="button" onClick={handleSubmitComment} className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">Send</button>
                       </div>
                     </div>
                   )}
-
                   {(feedbackStatus === "submitting" || feedbackStatus === "done") && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground/70">
-                      <CheckIcon />
-                      <span className="text-[11px]">Thanks for the feedback.</span>
-                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground/70"><CheckIcon /><span className="text-[11px]">Thanks for the feedback.</span></div>
                   )}
                 </div>
               </div>
-
-              {/* Follow-up input */}
               <div className="flex gap-2">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  placeholder="Ask a follow-up\u2026"
-                  className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-                />
-                <button
-                  onClick={() => handleSearch()}
-                  disabled={!query.trim()}
-                  aria-label="Send follow-up"
-                  className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 hover:opacity-90 active:scale-95 transition-all flex-shrink-0"
-                >
-                  <ArrowIcon />
-                </button>
+                <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} placeholder="Ask a follow-up\u2026" className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
+                <button onClick={() => handleSearch()} disabled={!query.trim()} aria-label="Send follow-up" className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 hover:opacity-90 active:scale-95 transition-all flex-shrink-0"><ArrowIcon /></button>
               </div>
             </motion.div>
           )}
 
-          {/* No content */}
           {activeQuery && !loading && noContent && (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-16 gap-3 text-center"
-            >
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <p className="text-sm text-muted-foreground">No results found for that query.</p>
-              <button
-                onClick={() => { setActiveQuery(null); setNoContent(false); }}
-                className="text-xs text-primary hover:underline"
-              >
-                Try another question
-              </button>
+              <button onClick={() => { setActiveQuery(null); setNoContent(false); }} className="text-xs text-primary hover:underline">Try another question</button>
             </motion.div>
           )}
 
