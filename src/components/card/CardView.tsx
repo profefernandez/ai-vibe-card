@@ -248,11 +248,19 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
 
       {/* ── Top nav bar — clean, no separator ── */}
       <header className="flex items-center justify-between px-4 py-3 flex-shrink-0" role="banner">
-        <div className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
-            <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
-          </svg>
-          <span className="font-semibold text-[13px] text-foreground/90 tracking-tight">{siteName}</span>
+        {/* Logo + company name */}
+        <div className="flex items-center gap-2.5">
+          {/* Logo slot — shows avatar_url if set, otherwise a placeholder circle */}
+          <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-primary/20 border border-primary/30 flex items-center justify-center">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" aria-hidden="true" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
+              </svg>
+            )}
+          </div>
+          <span className="font-semibold text-[14px] text-foreground/90 tracking-tight">{siteName}</span>
         </div>
         <div className="flex items-center gap-1.5" aria-label="AI Concierge active">
           <span className="w-2 h-2 rounded-full bg-primary" aria-hidden="true" />
@@ -325,18 +333,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               />
             </div>
 
-            {/* Site name */}
-            <p
-              className="card-font-display font-bold leading-[1.05] bg-clip-text text-transparent"
-              style={{
-                fontSize: "clamp(1.55rem, 2vw, 2rem)",
-                backgroundImage: "linear-gradient(160deg, hsl(38 95% 62%), hsl(38 85% 48%))",
-              }}
-            >
-              {siteName}
-            </p>
-
-            {/* Name + tagline */}
+            {/* Name + tagline — site name removed from card, shown in nav bar instead */}
             <div className="space-y-1.5">
               <p className="font-bold text-white text-[1.35rem] leading-tight tracking-tight">{displayName}</p>
               <p className="text-primary text-[14px] font-semibold">{tagline}</p>
