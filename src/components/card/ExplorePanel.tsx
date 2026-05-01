@@ -15,6 +15,9 @@ interface ExplorePanelProps {
   /** When true the top polaroid banner is suppressed — the desktop layout
    *  renders photos in its own dedicated centre column instead. */
   hideBanner?: boolean;
+  /** When true the panel is always expanded and fills its parent container.
+   *  Used by the desktop 3-column layout where the panel is a permanent column. */
+  alwaysOpen?: boolean;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -94,6 +97,7 @@ const ExplorePanel = ({
   onClose,
   onAnswer,
   hideBanner = false,
+  alwaysOpen = false,
 }: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
@@ -110,7 +114,7 @@ const ExplorePanel = ({
   const [feedbackComment, setFeedbackComment] = useState("");
 
   // Banner slideshow — suppressed when hideBanner=true (desktop centre column
-  // owns photo display instead).
+  // owns photo display instead) or when alwaysOpen=true.
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [kbIndex, setKbIndex] = useState(0);
 
@@ -127,6 +131,7 @@ const ExplorePanel = ({
   }, [answer]);
 
   const currentBanner = kbImages.length > 0 ? kbImages[kbIndex % kbImages.length] : null;
+  const showBanner = !hideBanner && !alwaysOpen && currentBanner;
 
   useEffect(() => {
     setFeedbackStatus("idle");
@@ -216,22 +221,25 @@ const ExplorePanel = ({
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-background">
+  // ── alwaysOpen = desktop column mode ─────────────────────────────────────
+  // The panel fills its parent flex container completely. No collapse chrome.
+  const panelClasses = alwaysOpen
+    ? "flex flex-col h-full min-h-0 bg-background"
+    : "flex flex-col h-full bg-background";
 
-      {/* ── Polaroid banner (mobile only / hideBanner=false) ──────────────────
-          On desktop the PhotoStage component in the centre bento column
-          handles photo display, so we suppress the banner there.
-      ────────────────────────────────────────────────────────────────── */}
-      {!hideBanner && currentBanner && (
+  return (
+    <div className={panelClasses}>
+
+      {/* ── Polaroid banner (mobile only / hideBanner=false / alwaysOpen=false) */}
+      {showBanner && (
         <div className="px-6 pt-6 pb-2 flex flex-col items-center">
           <div className="relative w-full max-w-sm">
             <div className="bg-white p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
               <AnimatePresence mode="wait">
                 <motion.img
-                  key={currentBanner.id}
-                  src={currentBanner.url}
-                  alt={currentBanner.caption || "Image"}
+                  key={currentBanner!.id}
+                  src={currentBanner!.url}
+                  alt={currentBanner!.caption || "Image"}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -239,9 +247,9 @@ const ExplorePanel = ({
                   className="w-full aspect-[4/3] object-cover rounded-sm"
                 />
               </AnimatePresence>
-              {currentBanner.caption && (
+              {currentBanner!.caption && (
                 <p className="text-xs text-neutral-700 text-center mt-2 font-sans italic line-clamp-1">
-                  {currentBanner.caption}
+                  {currentBanner!.caption}
                 </p>
               )}
             </div>
@@ -249,11 +257,22 @@ const ExplorePanel = ({
         </div>
       )}
 
-      {/* ── Header / search ────────────────────────────────────────────── */}
-      <div className="px-6 pt-6 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-          Explore
-        </p>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="px-5 pt-5 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
+        {/* Column title — only shown in alwaysOpen desktop mode */}
+        {alwaysOpen && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <p className="text-xs font-semibold text-primary uppercase tracking-widest">
+              AI Concierge
+            </p>
+          </div>
+        )}
+        {!alwaysOpen && (
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Explore
+          </p>
+        )}
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
           className="relative flex items-center"
@@ -262,14 +281,14 @@ const ExplorePanel = ({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search or ask anything\u2026"
-            aria-label="Explore search"
+            placeholder="Ask me anything…"
+            aria-label="AI Concierge search"
             className="w-full bg-secondary/50 border border-border/40 rounded-xl pl-10 pr-11 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
           />
           <button
             type="submit"
             disabled={!query.trim() || loading}
-            aria-label="Search"
+            aria-label="Send"
             className="absolute right-2 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-25 hover:opacity-90 active:scale-95 transition-all"
           >
             {loading ? <SpinnerIcon /> : <ArrowIcon />}
@@ -277,8 +296,8 @@ const ExplorePanel = ({
         </form>
       </div>
 
-      {/* ── Content ────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* ── Content — scrollable ───────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0">
         <AnimatePresence mode="wait">
 
           {!activeQuery && (
@@ -297,7 +316,7 @@ const ExplorePanel = ({
                 ))}
               </div>
               <div className="pt-4 border-t border-border/20">
-                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">Powered by AI \u00b7 Grounded in the NASW Code of Ethics</p>
+                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">Powered by AI · Grounded in the NASW Code of Ethics</p>
               </div>
             </motion.div>
           )}
@@ -305,7 +324,7 @@ const ExplorePanel = ({
           {activeQuery && loading && (
             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-16 gap-3">
               <SpinnerIcon />
-              <p className="text-sm text-muted-foreground">Searching\u2026</p>
+              <p className="text-sm text-muted-foreground">Thinking…</p>
             </motion.div>
           )}
 
@@ -350,7 +369,7 @@ const ExplorePanel = ({
                 </div>
               </div>
               <div className="flex gap-2">
-                <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} placeholder="Ask a follow-up\u2026" className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} placeholder="Ask a follow-up…" className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
                 <button onClick={() => handleSearch()} disabled={!query.trim()} aria-label="Send follow-up" className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 hover:opacity-90 active:scale-95 transition-all flex-shrink-0"><ArrowIcon /></button>
               </div>
             </motion.div>
