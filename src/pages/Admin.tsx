@@ -171,7 +171,13 @@ const Admin = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-dark">
+      <div className="min-h-screen flex w-full bg-gradient-dark relative">
+        {/* Top amber accent strip — matches the card's visual language */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent z-50 flex-shrink-0"
+          style={{ boxShadow: "0 0 12px hsl(var(--primary) / 0.35)" }}
+          aria-hidden="true"
+        />
         {/* Skip to content link for keyboard users */}
         <a
           href="#admin-main"
@@ -187,7 +193,7 @@ const Admin = () => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center justify-between border-b border-border/30 px-4 gap-3" role="banner">
+          <header className="h-14 flex items-center justify-between border-b border-primary/15 px-4 gap-3 bg-card/60 backdrop-blur-sm" role="banner">
             <div className="flex items-center gap-3 min-w-0">
               <SidebarTrigger aria-label="Toggle sidebar" />
               <h1 className="text-lg font-semibold text-foreground font-sans shrink-0">
@@ -244,6 +250,10 @@ const Admin = () => {
             ref={mainRef}
             tabIndex={-1}
             className="flex-1 p-4 md:p-6 overflow-auto focus:outline-none"
+            style={{
+              backgroundImage: "radial-gradient(circle, hsl(var(--primary) / 0.04) 1px, transparent 1px)",
+              backgroundSize: "22px 22px",
+            }}
             aria-label={sectionTitles[activeSection]}
             aria-live="polite"
           >

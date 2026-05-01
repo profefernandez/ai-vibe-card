@@ -473,6 +473,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           ctaLabel={ctaLabel}
           workUrl={workUrl}
           saveContactUrl={saveContactUrl}
+          slug={profile?.slug}
         />
       </div>
 

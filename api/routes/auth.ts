@@ -19,6 +19,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { serviceDb } from "../db.js";
 import { requireAuth, hashToken, type AuthRequest } from "../middleware/auth.js";
 import { logAudit } from "../lib/audit.js";
+import { sendEmail } from "../lib/email.js";
 import { logger } from "../logger.js";
 
 export const router = Router();
@@ -272,6 +273,100 @@ router.post("/logout", requireAuth, async (req: AuthRequest, res) => {
     } catch (err) {
         logger.error({ err }, "logout error");
         res.status(500).json({ error: "Logout failed" });
+    }
+});
+
+// ── Forgot password — send reset email ──────────────────────────────────────
+router.post("/forgot-password", async (req, res) => {
+    const { email } = req.body as { email?: string };
+
+    // Always return 200 to prevent email enumeration
+    if (!email || !EMAIL_RE.test(email)) {
+        res.json({ ok: true });
+        return;
+    }
+
+    try {
+        const { rows } = await serviceDb.query(
+            `SELECT id FROM users WHERE LOWER(email) = LOWER($1)`,
+            [email.trim()],
+        );
+
+        if (rows.length > 0) {
+            const userId = rows[0].id as string;
+            const token = randomBytes(32).toString("hex");
+            const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+            await serviceDb.query(
+                `UPDATE users SET reset_token = $1, reset_token_expires_at = $2 WHERE id = $3`,
+                [token, expires, userId],
+            );
+
+            const frontendUrl = process.env.FRONTEND_URL || "https://ai.60wattsofclarity.com";
+            const resetUrl = `${frontendUrl}/auth?reset=${token}`;
+
+            await sendEmail({
+                to: email.trim(),
+                subject: "Reset your password — AI Vibe Card",
+                text: `Click the link below to reset your password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you did not request a password reset, ignore this email.`,
+                html: `<p>Click the link below to reset your password. This link expires in 1 hour.</p><p><a href="${resetUrl}">Reset my password</a></p><p>If you did not request a password reset, ignore this email.</p>`,
+            });
+
+            logAudit({ userId, action: "forgot_password", ip: req.ip, userAgent: req.get("user-agent") });
+        }
+
+        // Always 200 — never reveal whether the email exists
+        res.json({ ok: true });
+    } catch (err) {
+        logger.error({ err }, "forgot-password error");
+        res.json({ ok: true });
+    }
+});
+
+// ── Reset password — consume token and set new password ──────────────────────
+router.post("/reset-password", async (req, res) => {
+    const { token, password } = req.body as { token?: string; password?: string };
+
+    if (!token || !password || password.length < 8) {
+        res.status(400).json({ error: "Token and new password (min 8 chars) are required" });
+        return;
+    }
+
+    try {
+        const { rows } = await serviceDb.query(
+            `SELECT id FROM users
+             WHERE reset_token = $1
+               AND reset_token_expires_at > now()`,
+            [token],
+        );
+
+        if (rows.length === 0) {
+            res.status(400).json({ error: "Invalid or expired reset link" });
+            return;
+        }
+
+        const userId = rows[0].id as string;
+        const hash = await bcrypt.hash(password, SALT_ROUNDS);
+
+        await serviceDb.query(
+            `UPDATE users
+             SET password_hash = $1,
+                 reset_token = NULL,
+                 reset_token_expires_at = NULL,
+                 failed_login_count = 0,
+                 locked_until = NULL
+             WHERE id = $2`,
+            [hash, userId],
+        );
+
+        // Revoke all existing sessions so old tokens cannot be reused
+        await serviceDb.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+
+        logAudit({ userId, action: "reset_password", ip: req.ip, userAgent: req.get("user-agent") });
+        res.json({ ok: true, message: "Password updated. Please sign in." });
+    } catch (err) {
+        logger.error({ err }, "reset-password error");
+        res.status(500).json({ error: "Failed to reset password" });
     }
 });
 

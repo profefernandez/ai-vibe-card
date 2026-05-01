@@ -3,6 +3,7 @@
  *
  * Public:
  *   GET  /api/card/:slug           → view a public card profile
+ *   GET  /api/card/:slug/vcard      → download .vcf contact file
  *
  * Authenticated:
  *   POST   /api/card/:slug/connect → send a connection request
@@ -57,8 +58,58 @@ router.get("/:slug", async (req, res) => {
     }
 });
 
-// ── Authenticated: request connection ────────────────────────────────────────
+// ── Public: download vCard (.vcf) ───────────────────────────────────────────────
+router.get("/:slug/vcard", async (req, res) => {
+    const { slug } = req.params;
+    if (!slug || slug.length > 100 || !/^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/i.test(slug)) {
+        res.status(400).send("Invalid slug");
+        return;
+    }
 
+    try {
+        const { rows } = await serviceDb.query(
+            `SELECT display_name, tagline, bio, cta_url, social_links FROM profiles WHERE LOWER(slug) = LOWER($1)`,
+            [slug],
+        );
+
+        if (rows.length === 0) {
+            res.status(404).send("Card not found");
+            return;
+        }
+
+        const p = rows[0];
+        const frontendUrl = process.env.FRONTEND_URL || "https://ai.60wattsofclarity.com";
+        const cardUrl = `${frontendUrl}/card/${slug}`;
+
+        // Split display name into first/last for N field
+        const nameParts = (p.display_name || "").trim().split(/\s+/);
+        const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+        const firstName = nameParts.join(" ");
+
+        // Escape vCard special characters
+        const esc = (s: string) => (s || "").replace(/[,;\\]/g, (c) => `\\${c}`).replace(/\n/g, "\\n");
+
+        const lines = [
+            "BEGIN:VCARD",
+            "VERSION:3.0",
+            `N:${esc(lastName)};${esc(firstName)};;;`,
+            `FN:${esc(p.display_name || "")}`,
+            `TITLE:${esc(p.tagline || "")}`,
+            `NOTE:${esc(p.bio || "")}`,
+            `URL:${cardUrl}`,
+            "END:VCARD",
+        ];
+
+        res.setHeader("Content-Type", "text/vcard; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${slug}.vcf"`);
+        res.send(lines.join("\r\n"));
+    } catch (err) {
+        logger.error({ err }, "vcard error");
+        res.status(500).send("Error generating contact file");
+    }
+});
+
+// ── Authenticated: request connection ────────────────────────────────────────────
 router.post("/:slug/connect", requireAuth, async (req: AuthRequest, res) => {
     const { slug } = req.params;
     const { message } = req.body as { message?: string };

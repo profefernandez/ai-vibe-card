@@ -6,10 +6,15 @@ interface FooterBarProps {
   ctaLabel?: string;
   workUrl?: string;
   saveContactUrl?: string;
+  slug?: string;
 }
 
-const FooterBar = ({ ctaUrl = "#", ctaLabel = "Book Time", workUrl = "#", saveContactUrl = "#" }: FooterBarProps) => {
+const FooterBar = ({ ctaUrl = "#", ctaLabel = "Book Time", workUrl = "#", saveContactUrl, slug }: FooterBarProps) => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
+  // Derive vCard URL from slug if available, otherwise fall back to prop or #
+  const vcardUrl = slug
+    ? `${import.meta.env.VITE_API_URL || "/api"}/card/${slug}/vcard`
+    : (saveContactUrl ?? "#");
   const actionTileClass =
     "flex flex-1 items-center justify-center gap-2.5 sm:gap-3.5 px-3 sm:px-5 py-4 hover:bg-primary/6 transition-all duration-200 group";
   const actionIconClass =
@@ -45,10 +50,10 @@ const FooterBar = ({ ctaUrl = "#", ctaLabel = "Book Time", workUrl = "#", saveCo
 
           {/* Save Contact */}
           <a
-            href={saveContactUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={vcardUrl}
+            download
             className={actionTileClass}
+            aria-label="Download contact card (.vcf)"
           >
             <span className={actionIconClass}>
               <UserCirclePlus size={22} weight="duotone" className="text-primary" />
