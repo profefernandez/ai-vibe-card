@@ -9,6 +9,12 @@ interface ExplorePanelProps {
   profileId?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
+  /** Called each time a new AI answer lands — used by the desktop layout to
+   *  advance the PhotoStage centre column in sync with the chat. */
+  onAnswer?: () => void;
+  /** When true the polaroid banner at the top is suppressed — the desktop
+   *  layout shows photos in the dedicated centre column instead. */
+  hideBanner?: boolean;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -16,7 +22,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 type FeedbackRating = "up" | "down";
 type FeedbackStatus = "idle" | "pending-comment" | "submitting" | "done";
 
-// ── SVG icons ─────────────────────────────────────────────────────────────────
+// ── SVG icons ────────────────────────────────────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="8" />
@@ -81,7 +87,14 @@ async function postFeedback(payload: {
   }
 }
 
-const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProps) => {
+const ExplorePanel = ({
+  siteId,
+  profileId,
+  onSearch,
+  onClose,
+  onAnswer,
+  hideBanner = false,
+}: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -89,21 +102,14 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   const [loading, setLoading] = useState(false);
   const [noContent, setNoContent] = useState(false);
 
-  // Per-response binding values — the server returns a single-use HMAC
-  // feedback_token bound to (profile_id, conversation_id, hash(answer))
-  // when this exact response was generated. Without it the API rejects
-  // feedback. profile_id from chat response overrides the prop default
-  // when present (the server resolves the site owner authoritatively).
   const [feedbackToken, setFeedbackToken] = useState<string | null>(null);
   const [boundProfileId, setBoundProfileId] = useState<string | null>(null);
 
-  // Feedback state — scoped to the currently displayed assistant reply.
-  // Reset on every new query/answer so each reply gets its own rating.
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
 
-  // Banner slideshow — advances one slot per Q&A turn, hidden when empty.
+  // Banner slideshow — suppressed on desktop via hideBanner prop.
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [kbIndex, setKbIndex] = useState(0);
 
@@ -112,7 +118,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
     void db.kbImages.listPublic(profileId).then(({ data }) => setKbImages(data));
   }, [profileId]);
 
-  // Advance the slide each time a new answer lands.
+  // Advance the slide each time a new answer lands (mobile banner only).
   useEffect(() => {
     if (!answer || kbImages.length === 0) return;
     setKbIndex((i) => (i + 1) % kbImages.length);
@@ -129,12 +135,11 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
   const handleRate = (rating: FeedbackRating) => {
     if (feedbackStatus !== "idle") return;
-    if (!feedbackToken) return; // can't submit without a server-issued token
+    if (!feedbackToken) return;
 
     setFeedbackRating(rating);
 
     if (rating === "up") {
-      // Thumbs-up: submit immediately, no comment prompt.
       setFeedbackStatus("done");
       void postFeedback({
         profile_id: boundProfileId ?? profileId ?? null,
@@ -145,11 +150,6 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         feedback_token: feedbackToken,
       });
     } else {
-      // Thumbs-down: open the comment field. Submission happens on Send so
-      // we use the single-use token exactly once (per-response). If the user
-      // navigates away without clicking Send the rating is dropped — this
-      // is the cost of replay-safe single-use tokens, and it lines up with
-      // the security trade-off discussed in the API plan (Phase 4 / M7).
       setFeedbackStatus("pending-comment");
     }
   };
@@ -203,14 +203,13 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         profile_id?: string;
       };
       if (result.conversation_id) setConversationId(result.conversation_id);
-      // Capture the binding values returned with the response so the
-      // visitor can echo them on /api/feedback. profile_id from the
-      // server is authoritative (the site owner) and overrides the prop.
       setFeedbackToken(result.feedback_token ?? null);
       setBoundProfileId(result.profile_id ?? null);
 
       if (result.response) {
         setAnswer(result.response);
+        // Notify parent (CardView) so the desktop PhotoStage advances.
+        onAnswer?.();
       } else {
         setNoContent(true);
       }
@@ -224,8 +223,12 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   return (
     <div className="flex flex-col h-full bg-background">
 
-      {/* Framed banner slideshow — advances per Q&A turn. */}
-      {currentBanner && (
+      {/*
+        Polaroid banner — shown on mobile where there is no dedicated centre
+        column. Suppressed on desktop (hideBanner=true) because PhotoStage
+        takes over that responsibility in the bento grid.
+      */}
+      {!hideBanner && currentBanner && (
         <div className="px-6 pt-6 pb-2 flex flex-col items-center">
           <div className="relative w-full max-w-sm">
             <div className="bg-white p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
@@ -285,7 +288,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
       <div className="flex-1 overflow-y-auto px-6 py-5">
         <AnimatePresence mode="wait">
 
-          {/* Suggestions state */}
+          {/* Suggestions */}
           {!activeQuery && (
             <motion.div
               key="suggestions"
@@ -321,7 +324,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
             </motion.div>
           )}
 
-          {/* Loading state */}
+          {/* Loading */}
           {activeQuery && loading && (
             <motion.div
               key="loading"
@@ -335,7 +338,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
             </motion.div>
           )}
 
-          {/* Answer state */}
+          {/* Answer */}
           {activeQuery && !loading && answer && (
             <motion.div
               key="answer"
@@ -361,24 +364,14 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                   <ReactMarkdown>{answer}</ReactMarkdown>
                 </div>
 
-                {/* Feedback row — anonymous thumbs-up / thumbs-down. */}
+                {/* Feedback */}
                 <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-2">
                   {feedbackStatus === "idle" && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => handleRate("up")}
-                        aria-label="Rate response helpful"
-                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1"
-                      >
+                      <button type="button" onClick={() => handleRate("up")} aria-label="Rate response helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1">
                         <ThumbsUpIcon />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRate("down")}
-                        aria-label="Rate response not helpful"
-                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
-                      >
+                      <button type="button" onClick={() => handleRate("down")} aria-label="Rate response not helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1">
                         <ThumbsDownIcon />
                       </button>
                     </>
@@ -399,11 +392,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                         className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                       <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={handleSubmitComment}
-                          className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors"
-                        >
+                        <button type="button" onClick={handleSubmitComment} className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">
                           Send
                         </button>
                       </div>
@@ -418,6 +407,8 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                   )}
                 </div>
               </div>
+
+              {/* Follow-up input */}
               <div className="flex gap-2">
                 <input
                   value={query}
@@ -438,7 +429,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
             </motion.div>
           )}
 
-          {/* No content state */}
+          {/* No content */}
           {activeQuery && !loading && noContent && (
             <motion.div
               key="empty"
@@ -459,7 +450,6 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
         </AnimatePresence>
       </div>
-
     </div>
   );
 };
