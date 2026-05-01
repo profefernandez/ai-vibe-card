@@ -235,16 +235,30 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
       style={rootStyle}
     >
 
+      {/* ── AAA: Skip navigation links — first focusable elements in DOM ── */}
+      <a
+        href="#ai-chat-input"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:top-3 focus:left-3 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-xl focus:text-sm focus:font-semibold focus:shadow-lg"
+      >
+        Skip to AI Chat
+      </a>
+      <a
+        href="#card-profile"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:top-3 focus:left-40 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-xl focus:text-sm focus:font-semibold focus:shadow-lg"
+      >
+        Skip to Profile
+      </a>
+
       {/* ── Top nav bar ── */}
-      <header className="flex items-center justify-between px-5 py-3.5 flex-shrink-0">
+      <header className="flex items-center justify-between px-5 py-3.5 flex-shrink-0" role="banner">
         <div className="flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
             <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
           </svg>
           <span className="card-font-display font-semibold text-[12px] text-primary tracking-[0.16em] uppercase">{siteName}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-primary/88 font-medium tracking-[0.12em] uppercase">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" />
+        <div className="flex items-center gap-1.5 text-[11px] text-primary/88 font-medium tracking-[0.12em] uppercase" aria-label="AI Concierge active">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" aria-hidden="true" />
           AI Concierge
         </div>
       </header>
@@ -298,12 +312,13 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             COLUMN 1 — Profile card
             ════════════════════════════════════════ */}
         <aside
+          id="card-profile"
           className={`${PANEL_CLASS} flex flex-col overflow-y-auto`}
           style={{
             ...PANEL_DOT_TEXTURE,
             transform: "translateY(var(--profile-offset-y))",
           }}
-          aria-label="Profile"
+          aria-label="Profile information"
         >
           <div className="flex flex-col items-center text-center px-5 md:px-6 pt-6 pb-6 gap-4.5">
 
@@ -350,7 +365,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               {ctaEmbed ? (
                 <button
                   onClick={() => setIsCtaOpen(true)}
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30 focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
                 >
                   <span className="flex items-center gap-2.5">
                     <CalendarDays className="w-[18px] h-[18px]" />
@@ -363,7 +378,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30 focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
                 >
                   <span className="flex items-center gap-2.5">
                     <CalendarDays className="w-[18px] h-[18px]" />
@@ -376,7 +391,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                 href={saveContactUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all"
+                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
               >
                 <Download className="w-[18px] h-[18px]" />
                 Download My One-Pager
@@ -389,12 +404,13 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             COLUMN 2 — Hero + features + testimonial
             ════════════════════════════════════════ */}
         <main
+          id="main-content"
           className={`${PANEL_CLASS} flex min-w-0 overflow-hidden relative`}
           style={{
             ...PANEL_DOT_TEXTURE,
             transform: "translateY(var(--content-offset-y))",
           }}
-          aria-label="Content"
+          aria-label="Services and content"
         >
           <div
             className="absolute inset-0"
@@ -451,7 +467,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             ...PANEL_DOT_TEXTURE,
             transform: "translateY(var(--chat-offset-y))",
           }}
-          aria-label="AI Concierge"
+          aria-label="AI Concierge chat"
         >
           <ExplorePanel
             siteId={siteId}

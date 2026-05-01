@@ -229,3 +229,40 @@
   background: hsl(38 95% 52% / 0.25);
   border-radius: 2px;
 }
+
+/* ── AAA: Global focus ring — visible, high-contrast, never obscured ── */
+:focus-visible {
+  outline: 2px solid hsl(38 95% 52%);
+  outline-offset: 2px;
+}
+
+/* Remove default outline only when we have a custom focus-visible style */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── AAA: Reduced motion — respect user preference ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Premium: Subtle noise texture overlay for depth ── */
+.premium-panel {
+  position: relative;
+}
+.premium-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
