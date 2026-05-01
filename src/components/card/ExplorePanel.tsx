@@ -204,15 +204,12 @@ const ExplorePanel = ({
 
       {/* ── Header ── */}
       {alwaysOpen ? (
-        <div className="px-5 pt-5 pb-4 flex-shrink-0 border-b border-primary/12 bg-gradient-to-b from-primary/8 to-transparent">
-          <div className="flex items-center gap-2.5 mb-2">
-            <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-primary">AI Concierge</span>
+        <div className="px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/8">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" aria-hidden="true" />
+            <span className="text-[17px] font-bold text-white tracking-tight">AI Concierge</span>
           </div>
-          <p className="text-[13px] text-muted-foreground/90 leading-relaxed font-medium max-w-[28ch]">
+          <p className="text-[13px] text-foreground/60 leading-relaxed">
             Ask me anything about AI literacy, strategy, or working together.
           </p>
         </div>
@@ -265,42 +262,42 @@ const ExplorePanel = ({
             <motion.div key="suggestions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
               {alwaysOpen && (
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-secondary/60 border border-primary/20 overflow-hidden flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-black/20" aria-hidden="true">
+                  <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5 shadow-[0_4px_12px_rgba(245,158,11,0.35)]" aria-hidden="true">
                     {assistantAvatarUrl ? (
-                      <img src={assistantAvatarUrl} alt="" className="h-full w-full object-cover" />
+                      <img src={assistantAvatarUrl} alt="" className="h-full w-full object-cover rounded-full" />
                     ) : (
-                      <span className="text-[11px] font-bold text-primary">AI</span>
+                      <span className="text-[12px] font-bold text-primary-foreground">AI</span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="rounded-2xl rounded-tl-sm bg-card/60 border border-primary/12 px-4 py-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm">
-                      <p className="text-[14px] text-foreground/95 leading-relaxed font-medium">
+                    <div className="rounded-2xl rounded-tl-sm bg-[hsl(222_20%_14%)] border border-white/8 px-4 py-3.5">
+                      <p className="text-[14px] text-foreground/90 leading-relaxed">
                         Hi! I'm here to help you explore how AI literacy can create clarity, build capability, and drive real impact. What would you like to know?
                       </p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground/60 mt-1.5 ml-1 font-medium" aria-hidden="true">10:42</p>
+                    <p className="text-[11px] text-foreground/40 mt-1.5 ml-1" aria-hidden="true">10:42</p>
                   </div>
                 </div>
               )}
 
-              <p className="text-[11px] text-muted-foreground uppercase tracking-[0.18em] font-bold pt-1">
-                {alwaysOpen ? "Try asking about:" : "Suggested questions"}
+              <p className="text-[11px] text-foreground/50 uppercase tracking-[0.18em] font-semibold pt-1">
+                {alwaysOpen ? "TRY ASKING ABOUT:" : "Suggested questions"}
               </p>
-              <div className="space-y-2" role="list" aria-label="Suggested questions">
+              <div className="space-y-1.5" role="list" aria-label="Suggested questions">
                 {EXPLORE_SUGGESTIONS.map((s) => (
                   <div key={s} role="listitem">
                     <button
                       onClick={() => handleSearch(s)}
-                      className="w-full text-left group flex items-center justify-between gap-2 px-4 py-3.5 rounded-2xl border border-border/25 bg-card/30 hover:bg-primary/8 hover:border-primary/30 hover:-translate-y-[1px] transition-all duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[44px]"
+                      className="w-full text-left group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-white/8 bg-transparent hover:bg-white/5 hover:border-white/15 transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[44px]"
                       aria-label={`Ask: ${s}`}
                     >
                       <span className="flex items-center gap-3 min-w-0">
                         {alwaysOpen && (
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary/80 text-sm font-light flex-shrink-0 leading-none" aria-hidden="true">+</span>
+                          <span className="text-primary/70 text-base font-light flex-shrink-0" aria-hidden="true">+</span>
                         )}
-                        <span className="text-[13.5px] text-foreground/85 group-hover:text-foreground transition-colors truncate font-semibold">{s}</span>
+                        <span className="text-[13.5px] text-foreground/80 group-hover:text-foreground transition-colors truncate">{s}</span>
                       </span>
-                      <span className="text-muted-foreground/40 group-hover:text-primary/70 transition-colors flex-shrink-0" aria-hidden="true"><ArrowIcon /></span>
+                      <span className="text-foreground/30 group-hover:text-primary/60 transition-colors flex-shrink-0" aria-hidden="true"><ArrowIcon /></span>
                     </button>
                   </div>
                 ))}
@@ -441,7 +438,7 @@ const ExplorePanel = ({
 
       {/* ── Persistent bottom input — desktop alwaysOpen mode ── */}
       {alwaysOpen && (
-        <div className="px-5 pt-3 pb-5 border-t border-primary/12 flex-shrink-0 bg-gradient-to-t from-black/15 to-transparent">
+        <div className="px-5 pt-3 pb-5 border-t border-white/8 flex-shrink-0">
           <form
             onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
             role="search"
@@ -455,7 +452,7 @@ const ExplorePanel = ({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type your question..."
-              className="w-full bg-secondary/30 border border-border/40 rounded-2xl pl-4 pr-14 py-3.5 text-[14px] font-medium text-foreground placeholder:text-muted-foreground/55 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background focus:border-primary/40 transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              className="w-full bg-[hsl(222_20%_14%)] border border-white/10 rounded-xl pl-4 pr-14 py-3 text-[14px] text-foreground placeholder:text-foreground/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background focus:border-primary/40 transition-all"
             />
             <button
               type="submit"

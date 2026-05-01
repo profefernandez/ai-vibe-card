@@ -32,27 +32,24 @@ export interface CardViewProps {
   applyMeta?: boolean;
 }
 
+// Clean panel — dark card bg, subtle border, no texture
 const PANEL_CLASS =
-  "rounded-[1.6rem] border border-primary/18 bg-card/55 backdrop-blur-xl shadow-[0_24px_80px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/5 relative overflow-hidden before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0))] before:content-['']";
+  "rounded-2xl border border-white/8 bg-[hsl(222_22%_10%)] relative overflow-hidden";
 
-// Subtle dot-grid texture overlay applied to each card panel via inline style.
-const PANEL_DOT_TEXTURE: React.CSSProperties = {
-  backgroundImage:
-    "radial-gradient(circle, hsl(var(--primary) / 0.06) 1px, transparent 1px)",
-  backgroundSize: "18px 18px",
-};
+// No dot texture — clean flat panels matching target design
+const PANEL_DOT_TEXTURE: React.CSSProperties = {};
 
 const LAYOUT_TUNER_STORAGE_KEY = "card-layout-tuner:v1";
 
 const DEFAULT_LAYOUT_TUNER_VALUES: LayoutTunerValues = {
-  leftRatio: 20,
-  rightRatio: 28,
-  gap: 12,
+  leftRatio: 19,
+  rightRatio: 26,
+  gap: 10,
   gridShiftY: 0,
   leftOffsetY: 0,
   middleOffsetY: 0,
   rightOffsetY: 0,
-  heroMinHeight: 280,
+  heroMinHeight: 340,
   heroOffsetY: 0,
   featureOffsetY: 0,
   testimonialOffsetY: 0,
@@ -93,7 +90,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
     () => ({
       ...getCardTypographyStyles(profile?.font_family),
       backgroundImage:
-        "radial-gradient(circle at 18% 18%, hsl(var(--primary) / 0.12), transparent 24%), radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.08), transparent 55%), radial-gradient(circle at 85% 80%, hsl(var(--primary) / 0.05), transparent 50%), linear-gradient(180deg, hsl(222 20% 7%) 0%, hsl(222 22% 5%) 100%)",
+        "linear-gradient(180deg, hsl(222 25% 6%) 0%, hsl(222 25% 5%) 100%)",
       "--card-grid-gap": `${layoutTunerValues.gap}px`,
       "--desktop-grid-columns": gridTemplateColumns,
       "--card-grid-shift-y": `${layoutTunerValues.gridShiftY}px`,
@@ -249,26 +246,19 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         Skip to Profile
       </a>
 
-      {/* ── Top nav bar ── */}
-      <header className="flex items-center justify-between px-5 py-3.5 flex-shrink-0" role="banner">
+      {/* ── Top nav bar — clean, no separator ── */}
+      <header className="flex items-center justify-between px-4 py-3 flex-shrink-0" role="banner">
         <div className="flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
             <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
           </svg>
-          <span className="card-font-display font-semibold text-[12px] text-primary tracking-[0.16em] uppercase">{siteName}</span>
+          <span className="font-semibold text-[13px] text-foreground/90 tracking-tight">{siteName}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-primary/88 font-medium tracking-[0.12em] uppercase" aria-label="AI Concierge active">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" aria-hidden="true" />
-          AI Concierge
+        <div className="flex items-center gap-1.5" aria-label="AI Concierge active">
+          <span className="w-2 h-2 rounded-full bg-primary" aria-hidden="true" />
+          <span className="text-[13px] text-foreground/80 font-semibold">AI Concierge</span>
         </div>
       </header>
-
-      {/* ── Header / cards separator — warm strip ── */}
-      <div
-        className="mx-3 h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent flex-shrink-0"
-        style={{ boxShadow: "0 0 12px hsl(var(--primary) / 0.35)" }}
-        aria-hidden="true"
-      />
 
       {/* ── Three-column bento grid ── */}
       {/* md (768px): 2-col profile+content; xl (1280px+): add AI panel column */}
@@ -320,10 +310,10 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           }}
           aria-label="Profile information"
         >
-          <div className="flex flex-col items-center text-center px-5 md:px-6 pt-6 pb-6 gap-4.5">
+          <div className="flex flex-col items-center text-center px-5 md:px-6 pt-7 pb-6 gap-4">
 
             {/* Avatar */}
-            <div className="w-28 h-28 md:w-32 md:h-32 rounded-[1.35rem] overflow-hidden border-2 border-primary/30 shadow-[0_18px_40px_-22px_rgba(255,191,90,0.7)] flex-shrink-0">
+            <div className="w-[130px] h-[130px] md:w-[140px] md:h-[140px] rounded-2xl overflow-hidden border border-white/15 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.6)] flex-shrink-0">
               <img
                 src={avatarUrl}
                 alt={`${displayName} — ${tagline}`}
@@ -335,25 +325,25 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               />
             </div>
 
-            {/* Site name — warm burnished copper, large, centered */}
+            {/* Site name */}
             <p
-              className="card-font-display font-bold leading-[1.02] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(255,191,90,0.18)]"
+              className="card-font-display font-bold leading-[1.05] bg-clip-text text-transparent"
               style={{
-                fontSize: "clamp(1.65rem, 2.2vw, 2.1rem)",
-                backgroundImage: "linear-gradient(180deg, hsl(var(--primary) / 0.98), hsl(var(--accent) / 0.72))",
+                fontSize: "clamp(1.55rem, 2vw, 2rem)",
+                backgroundImage: "linear-gradient(160deg, hsl(38 95% 62%), hsl(38 85% 48%))",
               }}
             >
               {siteName}
             </p>
 
             {/* Name + tagline */}
-            <div className="space-y-1">
-              <p className="font-semibold text-foreground text-[1.45rem] leading-tight tracking-tight">{displayName}</p>
-              <p className="text-primary text-[15px] font-semibold tracking-[0.02em]">{tagline}</p>
+            <div className="space-y-1.5">
+              <p className="font-bold text-white text-[1.35rem] leading-tight tracking-tight">{displayName}</p>
+              <p className="text-primary text-[14px] font-semibold">{tagline}</p>
             </div>
 
             {/* Bio */}
-            <p className="text-muted-foreground text-[13.5px] leading-relaxed font-medium max-w-[24ch]">{bio}</p>
+            <p className="text-foreground/65 text-[13px] leading-relaxed font-normal max-w-[26ch]">{bio}</p>
 
             {/* Social links */}
             {socialLinks.length > 0 && (
@@ -365,35 +355,35 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               {ctaEmbed ? (
                 <button
                   onClick={() => setIsCtaOpen(true)}
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30 focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3.5 rounded-xl bg-primary text-primary-foreground font-bold text-[14px] hover:brightness-110 active:scale-95 transition-all shadow-[0_4px_20px_rgba(245,158,11,0.35)] focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
                 >
-                  <span className="flex items-center gap-2.5">
-                    <CalendarDays className="w-[18px] h-[18px]" />
+                  <span className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
                     {ctaLabel}
                   </span>
-                  <span className="text-primary-foreground/90 text-base">→</span>
+                  <span className="text-primary-foreground/80 text-base">→</span>
                 </button>
               ) : (
                 <a
                   href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30 focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3.5 rounded-xl bg-primary text-primary-foreground font-bold text-[14px] hover:brightness-110 active:scale-95 transition-all shadow-[0_4px_20px_rgba(245,158,11,0.35)] focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
                 >
-                  <span className="flex items-center gap-2.5">
-                    <CalendarDays className="w-[18px] h-[18px]" />
+                  <span className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
                     {ctaLabel}
                   </span>
-                  <span className="text-primary-foreground/90 text-base">→</span>
+                  <span className="text-primary-foreground/80 text-base">→</span>
                 </a>
               )}
               <a
                 href={saveContactUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
+                className="flex items-center justify-center gap-2 w-full px-5 py-3.5 rounded-xl bg-transparent border border-white/20 text-foreground/80 font-semibold text-[14px] hover:bg-white/5 hover:border-white/30 transition-all focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background min-h-[48px]"
               >
-                <Download className="w-[18px] h-[18px]" />
+                <Download className="w-4 h-4" />
                 Download My One-Pager
               </a>
             </div>
@@ -412,24 +402,24 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           }}
           aria-label="Services and content"
         >
+          {/* Hero image — fills top ~60% of panel */}
           <div
             className="absolute inset-0"
-            style={{
-              transform: "translateY(var(--hero-offset-y))",
-            }}
+            style={{ transform: "translateY(var(--hero-offset-y))" }}
           >
             <HeroSlider
               slides={heroSlides}
               headline={heroHeadline}
               subheadline={heroSubheadline}
-              controlsBottomClassName="bottom-[17rem] md:bottom-[18rem]"
+              controlsBottomClassName="bottom-[14rem] md:bottom-[15rem]"
               overlayClassName="justify-start px-6 md:px-7 pt-7 md:pt-8"
             />
           </div>
 
-          <div className="relative z-10 mt-auto flex w-full flex-col bg-gradient-to-t from-black/88 via-black/52 to-transparent pt-36 md:pt-40">
+          {/* Bottom content — features + testimonial */}
+          <div className="relative z-10 mt-auto flex w-full flex-col bg-gradient-to-t from-black/95 via-black/70 to-transparent pt-32 md:pt-36">
             <div
-              className="px-4 md:px-5 pb-3 flex-shrink-0"
+              className="px-4 md:px-5 pb-4 flex-shrink-0"
               style={{ transform: "translateY(var(--feature-offset-y))" }}
             >
               <FeatureIcons
@@ -439,14 +429,14 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             </div>
 
             {testimonialText && (
-              <div className="mx-3 mb-3 flex-shrink-0" style={{ transform: "translateY(var(--testimonial-offset-y))" }}>
-                <div className="rounded-xl border border-white/12 bg-black/42 backdrop-blur-sm px-5 py-4 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.85)]">
+              <div className="mx-4 mb-4 flex-shrink-0" style={{ transform: "translateY(var(--testimonial-offset-y))" }}>
+                <div className="rounded-xl border border-white/10 bg-black/50 px-5 py-4">
                   <blockquote className="flex items-start gap-3">
-                    <span className="card-font-display text-primary text-3xl leading-none flex-shrink-0 -mt-1">&ldquo;</span>
+                    <span className="card-font-display text-primary text-2xl leading-none flex-shrink-0 -mt-0.5">&ldquo;</span>
                     <div className="min-w-0">
-                      <p className="text-foreground/92 text-[15px] leading-relaxed font-medium">{testimonialText.replace(/^[“"]|[”"]$/g, "")}</p>
+                      <p className="text-foreground/88 text-[14px] leading-relaxed">{testimonialText.replace(/^[\u201c\u201d]|[\u201c\u201d]$/g, "")}</p>
                       {testimonialAuthor && (
-                        <footer className="mt-2 text-primary text-[13px] font-semibold tracking-wide">{testimonialAuthor}</footer>
+                        <footer className="mt-2 text-primary text-[12px] font-semibold">{testimonialAuthor}</footer>
                       )}
                     </div>
                   </blockquote>
