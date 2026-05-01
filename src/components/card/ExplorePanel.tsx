@@ -223,9 +223,13 @@ const ExplorePanel = ({
 
   // ── alwaysOpen = desktop column mode ─────────────────────────────────────
   // The panel fills its parent flex container completely. No collapse chrome.
+  // Layout: header → scrollable content → input pinned to bottom.
   const panelClasses = alwaysOpen
-    ? "flex flex-col h-full min-h-0 bg-background"
+    ? "flex flex-col h-full min-h-0"
     : "flex flex-col h-full bg-background";
+
+  // Welcome timestamp (stable per session)
+  const welcomeTime = "10:42";
 
   return (
     <div className={panelClasses}>
@@ -258,65 +262,83 @@ const ExplorePanel = ({
       )}
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="px-5 pt-5 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
-        {/* Column title — only shown in alwaysOpen desktop mode */}
-        {alwaysOpen && (
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            <p className="text-xs font-semibold text-primary uppercase tracking-widest">
-              AI Concierge
-            </p>
+      {alwaysOpen ? (
+        <div className="px-5 pt-6 pb-4 flex-shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" />
+            <p className="card-font-display text-xl font-bold text-primary tracking-tight">AI Concierge</p>
           </div>
-        )}
-        {!alwaysOpen && (
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-            Explore
+          <p className="text-[13.5px] text-muted-foreground/90 leading-relaxed font-medium">
+            Ask me anything about AI literacy, strategy, or working together.
           </p>
-        )}
-        <form
-          onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
-          className="relative flex items-center"
-        >
-          <span className="absolute left-3.5 text-muted-foreground/50"><SearchIcon /></span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask me anything…"
-            aria-label="AI Concierge search"
-            className="w-full bg-secondary/50 border border-border/40 rounded-xl pl-10 pr-11 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-          />
-          <button
-            type="submit"
-            disabled={!query.trim() || loading}
-            aria-label="Send"
-            className="absolute right-2 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-25 hover:opacity-90 active:scale-95 transition-all"
-          >
-            {loading ? <SpinnerIcon /> : <ArrowIcon />}
-          </button>
-        </form>
-      </div>
+        </div>
+      ) : (
+        <div className="px-5 pt-5 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Explore</p>
+          <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative flex items-center">
+            <span className="absolute left-3.5 text-muted-foreground/50"><SearchIcon /></span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask me anything…"
+              aria-label="AI Concierge search"
+              className="w-full bg-secondary/50 border border-border/40 rounded-xl pl-10 pr-11 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+            />
+            <button
+              type="submit"
+              disabled={!query.trim() || loading}
+              aria-label="Send"
+              className="absolute right-2 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-25 hover:opacity-90 active:scale-95 transition-all"
+            >
+              {loading ? <SpinnerIcon /> : <ArrowIcon />}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ── Content — scrollable ───────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0">
+      <div className="flex-1 overflow-y-auto px-5 py-3 min-h-0">
         <AnimatePresence mode="wait">
 
           {!activeQuery && (
-            <motion.div key="suggestions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">Suggested questions</p>
-              <div className="space-y-2">
+            <motion.div key="suggestions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+
+              {/* Welcome chat bubble — only in alwaysOpen mode */}
+              {alwaysOpen && (
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-secondary border border-border/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-[11px] font-bold text-primary">AI</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="rounded-2xl rounded-tl-sm bg-secondary/40 border border-border/30 px-4 py-3">
+                      <p className="text-[14px] text-foreground/95 leading-relaxed font-medium">
+                        Hi! I'm here to help you explore how AI literacy can create clarity, build capability, and drive real impact. What would you like to know?
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/70 mt-1.5 ml-1 font-medium">{welcomeTime}</p>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-[12px] text-muted-foreground uppercase tracking-widest font-bold pt-1">
+                {alwaysOpen ? "Try asking about:" : "Suggested questions"}
+              </p>
+              <div className="space-y-2.5">
                 {EXPLORE_SUGGESTIONS.map((s) => (
                   <button
                     key={s}
                     onClick={() => handleSearch(s)}
-                    className="w-full text-left group flex items-center justify-between px-4 py-3 rounded-xl border border-border/30 bg-secondary/30 hover:bg-primary/5 hover:border-primary/25 transition-all duration-200"
+                    className="w-full text-left group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-border/30 bg-secondary/20 hover:bg-primary/5 hover:border-primary/30 transition-all duration-200"
                   >
-                    <span className="text-sm text-foreground/75 group-hover:text-foreground transition-colors">{s}</span>
-                    <span className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors"><ArrowIcon /></span>
+                    <span className="flex items-center gap-3 min-w-0">
+                      {alwaysOpen && (
+                        <span className="text-primary/80 text-lg font-light flex-shrink-0 leading-none">+</span>
+                      )}
+                      <span className="text-[14px] text-foreground/85 group-hover:text-foreground transition-colors truncate font-semibold">{s}</span>
+                    </span>
+                    <span className="text-muted-foreground/40 group-hover:text-primary/70 transition-colors flex-shrink-0"><ArrowIcon /></span>
                   </button>
                 ))}
-              </div>
-              <div className="pt-4 border-t border-border/20">
-                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">Powered by AI · Grounded in the NASW Code of Ethics</p>
               </div>
             </motion.div>
           )}
@@ -384,6 +406,32 @@ const ExplorePanel = ({
 
         </AnimatePresence>
       </div>
+
+      {/* ── Persistent input at bottom — desktop alwaysOpen mode only ── */}
+      {alwaysOpen && (
+        <div className="px-5 pt-3 pb-4 border-t border-border/20 flex-shrink-0">
+          <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative flex items-center">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Type your question..."
+              aria-label="Ask the AI Concierge"
+              className="w-full bg-secondary/30 border border-border/40 rounded-xl pl-4 pr-12 py-3 text-[14px] font-medium text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+            />
+            <button
+              type="submit"
+              disabled={!query.trim() || loading}
+              aria-label="Send"
+              className="absolute right-1.5 w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-25 hover:opacity-90 active:scale-95 transition-all shadow-md shadow-primary/30"
+            >
+              {loading ? <SpinnerIcon /> : <ArrowIcon />}
+            </button>
+          </form>
+          <p className="text-[11px] text-muted-foreground/60 mt-2.5 text-center leading-relaxed font-medium">
+            AI responses may vary. Please review important info.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

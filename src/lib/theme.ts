@@ -3,6 +3,26 @@
  * Applies CSS custom properties to the document root so Tailwind picks them up.
  */
 
+export type CardFontFamily = "inter" | "hybrid" | "playfair";
+
+export const CARD_FONT_PRESETS: Record<CardFontFamily, { label: string; sans: string; display: string }> = {
+    inter: {
+        label: "Inter",
+        sans: "'Inter', sans-serif",
+        display: "'Inter', sans-serif",
+    },
+    hybrid: {
+        label: "Editorial",
+        sans: "'Inter', sans-serif",
+        display: "'Playfair Display', serif",
+    },
+    playfair: {
+        label: "Playfair",
+        sans: "'Playfair Display', serif",
+        display: "'Playfair Display', serif",
+    },
+};
+
 export const ACCENT_HSL: Record<string, { primary: string; accent: string; ring: string; glow: string; soft: string }> = {
     amber: { primary: "38 95% 50%", accent: "38 80% 45%", ring: "38 95% 50%", glow: "38 95% 50%", soft: "38 60% 30%" },
     blue: { primary: "217 91% 60%", accent: "217 80% 50%", ring: "217 91% 60%", glow: "217 91% 60%", soft: "217 50% 30%" },
@@ -36,4 +56,12 @@ export function applyTheme(theme: string, accentColor: string) {
     root.style.setProperty("--amber-soft", palette.soft);
     root.style.setProperty("--sidebar-primary", palette.primary);
     root.style.setProperty("--sidebar-ring", palette.ring);
+}
+
+export function getCardTypographyStyles(fontFamily?: string): Record<string, string> {
+    const preset = CARD_FONT_PRESETS[(fontFamily as CardFontFamily) || "hybrid"] ?? CARD_FONT_PRESETS.hybrid;
+    return {
+        "--card-font-sans": preset.sans,
+        "--card-font-display": preset.display,
+    };
 }

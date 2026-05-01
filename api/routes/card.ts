@@ -33,7 +33,7 @@ router.get("/:slug", async (req, res) => {
     try {
         const { rows } = await serviceDb.query(
             `SELECT p.user_id, p.display_name, p.tagline, p.bio, p.avatar_url,
-                    p.cta_url, p.cta_label, p.cta_embed, p.social_links, p.card_layout,
+                    p.cta_url, p.cta_label, p.cta_embed, p.social_links, p.services, p.card_layout, p.font_family,
                     p.theme, p.accent_color, p.slug, p.ai_query_enabled,
                     p.show_qr_scan_link,
                     (SELECT s.id FROM sites s

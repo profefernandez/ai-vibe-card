@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,8 @@
 
 @layer base {
   :root {
+    --card-font-sans: 'Inter', sans-serif;
+    --card-font-display: 'Playfair Display', serif;
     --background: 222 20% 7%;
     --foreground: 210 20% 92%;
 
@@ -152,6 +154,7 @@
     font-size: 0.75rem !important;
     line-height: 1.4 !important;
   }
+
   [class*="text-[10px]"],
   [class*="text-[11px]"],
   [class*="text-[12px]"] {
@@ -161,6 +164,18 @@
 }
 
 @layer utilities {
+  .business-card-theme {
+    font-family: var(--card-font-sans);
+  }
+
+  .business-card-theme .card-font-sans {
+    font-family: var(--card-font-sans);
+  }
+
+  .business-card-theme .card-font-display {
+    font-family: var(--card-font-display);
+  }
+
   .text-gradient-amber {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, hsl(38 95% 55%), hsl(45 100% 68%));

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { apiClient as db } from "@/lib/apiClient";
-import type { User, Profile, SocialLink, CardLayout } from "@/types";
+import type { User, Profile, SocialLink, CardLayout, ServiceItem } from "@/types";
 import { PLATFORM_OPTIONS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     cta_label: "Get in Touch",
     cta_embed: "",
     social_links: [],
+    services: [],
     card_layout: "classic",
   });
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         cta_label: data.cta_label || "Get in Touch",
         cta_embed: data.cta_embed || "",
         social_links: Array.isArray(data.social_links) ? data.social_links : [],
+        services: Array.isArray((data as any).services) ? (data as any).services : [],
         card_layout: data.card_layout === "bold" ? "bold" : "classic",
       });
     }
@@ -70,6 +72,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           user_id: user.id,
           ...profile,
           social_links: profile.social_links as any,
+          services: (profile.services || []) as any,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" }
@@ -110,6 +113,42 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     const [moved] = updated.splice(from, 1);
     updated.splice(to, 0, moved);
     setProfile({ ...profile, social_links: updated });
+  };
+
+  const addService = () => {
+    const currentServices = profile.services || [];
+    if (currentServices.length >= 8) return;
+    setProfile({
+      ...profile,
+      services: [...currentServices, {
+        title: "",
+        description: "",
+        cta_label: profile.cta_label || "Sign Up",
+        cta_url: profile.cta_url || "",
+      }],
+    });
+  };
+
+  const updateService = (index: number, field: keyof ServiceItem, value: string) => {
+    const currentServices = [...(profile.services || [])];
+    currentServices[index] = { ...currentServices[index], [field]: value };
+    setProfile({ ...profile, services: currentServices });
+  };
+
+  const removeService = (index: number) => {
+    const currentServices = profile.services || [];
+    setProfile({
+      ...profile,
+      services: currentServices.filter((_, i) => i !== index),
+    });
+  };
+
+  const moveService = (from: number, to: number) => {
+    const currentServices = [...(profile.services || [])];
+    if (to < 0 || to >= currentServices.length) return;
+    const [moved] = currentServices.splice(from, 1);
+    currentServices.splice(to, 0, moved);
+    setProfile({ ...profile, services: currentServices });
   };
 
   const handleAvatarUpload = async (file: File) => {
@@ -382,6 +421,107 @@ export default function ProfileTab({ user }: ProfileTabProps) {
               Paste a scheduling widget embed (Calendly, Cal.com, Acuity, etc.). When set, the CTA button opens the embed inside the card instead of linking out.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Social Links ── */}
+      <Card className="bg-card/50 border-border/30">
+        <CardHeader>
+          <CardTitle className="text-base font-sans">Services + CTA</CardTitle>
+          <CardDescription>
+            Add service cards shown on your business card. Each service can have its own signup CTA.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(profile.services || []).map((service, i) => (
+            <div key={i} className="rounded-lg bg-secondary/30 p-3 space-y-3 border border-border/30">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">Service {i + 1}</p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveService(i, i - 1)}
+                    disabled={i === 0}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none px-2 py-1"
+                    aria-label={`Move service ${i + 1} up`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveService(i, i + 1)}
+                    disabled={i === (profile.services || []).length - 1}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none px-2 py-1"
+                    aria-label={`Move service ${i + 1} down`}
+                  >
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeService(i)}
+                    className="p-1.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label={`Remove service ${i + 1}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`service-title-${i}`}>Service Title</Label>
+                  <Input
+                    id={`service-title-${i}`}
+                    value={service.title || ""}
+                    onChange={(e) => updateService(i, "title", e.target.value)}
+                    placeholder="AI Readiness Sprint"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`service-cta-label-${i}`}>CTA Label</Label>
+                  <Input
+                    id={`service-cta-label-${i}`}
+                    value={service.cta_label || service.ctaLabel || ""}
+                    onChange={(e) => updateService(i, "cta_label", e.target.value)}
+                    placeholder="Sign Up"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`service-description-${i}`}>Description</Label>
+                <Textarea
+                  id={`service-description-${i}`}
+                  value={service.description || ""}
+                  onChange={(e) => updateService(i, "description", e.target.value)}
+                  placeholder="A clear outcome-focused summary of what people get."
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor={`service-cta-url-${i}`}>CTA URL</Label>
+                <Input
+                  id={`service-cta-url-${i}`}
+                  value={service.cta_url || service.ctaUrl || ""}
+                  onChange={(e) => updateService(i, "cta_url", e.target.value)}
+                  placeholder="https://your-booking-or-checkout-link.com"
+                />
+              </div>
+            </div>
+          ))}
+
+          {(profile.services || []).length < 8 && (
+            <Button type="button" variant="outline" size="sm" onClick={addService} className="w-full">
+              <Plus className="w-4 h-4 mr-1" /> Add Service
+            </Button>
+          )}
+
+          {(profile.services || []).length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No services yet. Add one to replace skeleton placeholders on your public card.
+            </p>
+          )}
         </CardContent>
       </Card>
 

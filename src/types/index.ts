@@ -22,7 +22,18 @@ export type SocialLink = {
     url: string;
 };
 
+export type ServiceItem = {
+    title: string;
+    description: string;
+    cta_label?: string;
+    cta_url?: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+};
+
 export type CardLayout = "classic" | "bold";
+
+export type CardFontFamily = "inter" | "hybrid" | "playfair";
 
 export interface Profile {
     display_name: string;
@@ -34,6 +45,7 @@ export interface Profile {
     cta_embed: string;
     social_links: SocialLink[];
     card_layout: CardLayout;
+    font_family?: CardFontFamily;
     theme: string;
     accent_color: string;
     seo_title: string;
@@ -46,6 +58,7 @@ export interface Profile {
     show_qr_scan_link?: boolean;
     /** Brand / company name shown at the top of the card (e.g. "60 Watts of Clarity") */
     site_name?: string;
+    services?: ServiceItem[];
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────

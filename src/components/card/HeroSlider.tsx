@@ -70,7 +70,7 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
                   decoding="async"
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-amber-900/40 via-neutral-900 to-black" />
+                <div className="w-full h-full bg-gradient-to-br from-primary/25 via-neutral-900 to-black" />
               )}
               {/* Dark gradient overlay for text legibility */}
               <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
@@ -80,15 +80,15 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
       </div>
 
       {/* Headline overlay */}
-      <div className="absolute inset-0 flex flex-col justify-center px-8 pointer-events-none">
+      <div className="absolute inset-0 flex flex-col justify-center px-7 pointer-events-none">
         {headline && (
           <h2
-            className="font-display font-bold text-white leading-tight"
-            style={{ fontSize: "clamp(2rem, 4vw, 3.25rem)" }}
+            className="card-font-display font-bold leading-[1.05]"
+            style={{ fontSize: "clamp(1.75rem, 3vw, 2.6rem)" }}
           >
             {headline.split(" over ").map((part, i) =>
               i === 0 ? (
-                <span key={i} className="text-amber-400">{part}<br /></span>
+                <span key={i} className="text-primary">{part}<br /></span>
               ) : (
                 <span key={i} className="text-white">over {part}</span>
               )
@@ -96,44 +96,49 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
           </h2>
         )}
         {subheadline && (
-          <p className="mt-3 text-white/70 text-sm max-w-[220px] leading-relaxed">
+          <p className="mt-3 text-white/75 text-[13px] max-w-[210px] leading-relaxed font-medium">
             {subheadline}
           </p>
         )}
       </div>
 
-      {/* Prev / Next arrows — visible on hover */}
-      <button
-        onClick={scrollPrev}
-        className="absolute left-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
-        aria-label="Previous slide"
+      {/* Carousel controls — always visible, centered at bottom: ← ●●●●● → */}
+      <div
+        className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-3 px-4"
+        role="group"
+        aria-label="Slide navigation"
       >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-      <button
-        onClick={scrollNext}
-        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
-        aria-label="Next slide"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
+        <button
+          onClick={scrollPrev}
+          className="p-1 rounded-full bg-black/40 text-white/85 hover:bg-black/60 hover:text-white transition-colors"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
 
-      {/* Dot indicators */}
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5" role="tablist" aria-label="Slide navigation">
-        {activeSlides.map((_, i) => (
-          <button
-            key={i}
-            role="tab"
-            aria-selected={i === selectedIndex}
-            aria-label={`Slide ${i + 1}`}
-            onClick={() => scrollTo(i)}
-            className={`rounded-full transition-all duration-300 ${
-              i === selectedIndex
-                ? "w-5 h-1.5 bg-amber-400"
-                : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
-            }`}
-          />
-        ))}
+        <div className="flex items-center gap-1.5" role="tablist">
+          {activeSlides.map((_, i) => (
+            <button
+              key={i}
+              role="tab"
+              aria-selected={i === selectedIndex}
+              aria-label={`Slide ${i + 1}`}
+              onClick={() => scrollTo(i)}
+              className={`rounded-full transition-all duration-300 ${i === selectedIndex
+                  ? "w-5 h-1.5 bg-primary"
+                  : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
+                }`}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={scrollNext}
+          className="p-1 rounded-full bg-black/40 text-white/85 hover:bg-black/60 hover:text-white transition-colors"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   );
