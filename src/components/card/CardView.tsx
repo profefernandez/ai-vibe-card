@@ -21,6 +21,20 @@ function setMetaTag(key: string, content: string, isProperty = false) {
   el.setAttribute("content", content);
 }
 
+/** Returns true when the viewport is md+ (>= 768 px). */
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
+}
+
 export interface CardViewProps {
   profile: Profile | null;
   siteId?: string | null;
@@ -35,11 +49,19 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const [isScanOpen, setIsScanOpen] = useState(false);
   /**
    * answerKey — incremented each time the AI delivers a new answer.
-   * Passed to both ExplorePanel (to notify it) and PhotoStage (to advance the gallery).
+   * Passed to PhotoStage to advance the gallery on every AI reply.
    * Starts at 0 so the initial mount does NOT trigger a photo advance.
    */
   const [answerKey, setAnswerKey] = useState(0);
   const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
+
+  /**
+   * isDesktop — true when viewport >= 768 px.
+   * Used to conditionally pass hideBanner to ExplorePanel so that:
+   *   • Desktop: PhotoStage (col 2) owns the gallery → banner hidden in ExplorePanel
+   *   • Mobile: PhotoStage is hidden → banner stays visible inside ExplorePanel
+   */
+  const isDesktop = useIsDesktop();
 
   useEffect(() => {
     if (!profile || !applyMeta) return;
@@ -128,11 +150,13 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         </div>
 
         {/*
-          ─────────────────────────────────────────────────────────────────────
-          BENTO GRID — three columns on desktop when Explore is open:
-            [profile sidebar]  |  [PhotoStage centre]  |  [ExplorePanel right]
-          On mobile the columns stack vertically (flex-col).
-          ─────────────────────────────────────────────────────────────────────
+          ── BENTO GRID ──────────────────────────────────────────────
+          Desktop (md+) when Explore is open:
+            [Profile sidebar 320px] | [PhotoStage 256px] | [ExplorePanel flex-1]
+          Mobile: columns stack vertically.
+          PhotoStage is hidden on mobile (hidden md:block), so hideBanner is
+          only passed to ExplorePanel on desktop to avoid losing the gallery.
+          ───────────────────────────────────────────────────
         */}
         <div className="relative z-10 flex flex-col md:flex-row h-full">
 
@@ -312,17 +336,22 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           </motion.div>
           {/* ── End Column 1 ── */}
 
-          {/* ── Column 2: PhotoStage — visible on md+ when Explore is open ── */}
+          {/*
+            ── Column 2: PhotoStage — desktop only (hidden md:block) ──
+            FIX 1: animate x instead of width so md:w-64 is never overridden by Framer inline style.
+            FIX 2: role="region" added so assistive tech can discover the labeled section.
+          */}
           <AnimatePresence>
             {isExploreOpen && (
               <motion.div
                 key="photo-stage"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="hidden md:block md:w-64 flex-shrink-0 border-r border-border/30 overflow-hidden"
+                role="region"
                 aria-label="Photo gallery"
+                className="hidden md:block md:w-64 flex-shrink-0 border-r border-border/30 overflow-hidden"
               >
                 <PhotoStage profileId={profileId} answerKey={answerKey} />
               </motion.div>
@@ -357,16 +386,16 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   {/*
-                    hideBanner suppresses the polaroid strip inside ExplorePanel on desktop
-                    because PhotoStage (column 2) is already showing the gallery.
-                    onAnswer increments answerKey so PhotoStage advances on every AI reply.
+                    FIX 3: hideBanner is gated by isDesktop so mobile visitors
+                    still see the polaroid banner inside ExplorePanel (PhotoStage
+                    is hidden on mobile via hidden md:block).
                   */}
                   <ExplorePanel
                     siteId={siteId}
                     profileId={profileId}
                     onClose={closeExplore}
                     onAnswer={handleAnswer}
-                    hideBanner
+                    hideBanner={isDesktop}
                   />
                 </motion.div>
               </motion.div>
