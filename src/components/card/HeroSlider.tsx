@@ -3,11 +3,14 @@ import Autoplay from "embla-carousel-autoplay";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { KbImage } from "@/lib/apiClient";
+import lightbulbHero from "@/assets/lightbulb-hero.svg";
 
 interface HeroSliderProps {
   slides: HeroSlide[];
   headline?: string;
   subheadline?: string;
+  controlsBottomClassName?: string;
+  overlayClassName?: string;
 }
 
 export interface HeroSlide {
@@ -29,12 +32,18 @@ export function kbImagesToSlides(images: KbImage[]): HeroSlide[] {
 const FALLBACK_SLIDES: HeroSlide[] = [
   {
     id: "fallback-1",
-    url: "",
-    caption: "",
+    url: lightbulbHero,
+    caption: "Lightbulb concept background",
   },
 ];
 
-const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
+const HeroSlider = ({
+  slides,
+  headline,
+  subheadline,
+  controlsBottomClassName = "bottom-3",
+  overlayClassName = "justify-center px-7",
+}: HeroSliderProps) => {
   const activeSlides = slides.length > 0 ? slides : FALLBACK_SLIDES;
 
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [
@@ -80,7 +89,7 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
       </div>
 
       {/* Headline overlay */}
-      <div className="absolute inset-0 flex flex-col justify-center px-7 pointer-events-none">
+      <div className={`absolute inset-0 flex flex-col pointer-events-none ${overlayClassName}`}>
         {headline && (
           <h2
             className="card-font-display font-bold leading-[1.05]"
@@ -104,7 +113,7 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
 
       {/* Carousel controls — always visible, centered at bottom: ← ●●●●● → */}
       <div
-        className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-3 px-4"
+        className={`absolute left-0 right-0 flex items-center justify-center gap-3 px-4 ${controlsBottomClassName}`}
         role="group"
         aria-label="Slide navigation"
       >
@@ -125,8 +134,8 @@ const HeroSlider = ({ slides, headline, subheadline }: HeroSliderProps) => {
               aria-label={`Slide ${i + 1}`}
               onClick={() => scrollTo(i)}
               className={`rounded-full transition-all duration-300 ${i === selectedIndex
-                  ? "w-5 h-1.5 bg-primary"
-                  : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
+                ? "w-5 h-1.5 bg-primary"
+                : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
                 }`}
             />
           ))}

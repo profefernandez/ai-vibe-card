@@ -41,8 +41,8 @@ const SocialLinks = ({ links, compact = false }: SocialLinksProps) => {
     ? links!
     : SKELETON_PLATFORMS.map((platform) => ({ platform, url: "" }));
 
-  const size = compact ? 36 : 40;
-  const iconSize = compact ? 18 : 20;
+  const size = compact ? 34 : 38;
+  const iconSize = compact ? 17 : 19;
 
   return (
     <motion.div
@@ -55,10 +55,10 @@ const SocialLinks = ({ links, compact = false }: SocialLinksProps) => {
         const Icon = ICON_MAP[platform] || Globe;
         const isPlaceholder = !hasLinks;
         const chipClass =
-          "rounded-xl flex items-center justify-center transition-all duration-200 border " +
+          "rounded-lg flex items-center justify-center transition-all duration-200 border shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] " +
           (isPlaceholder
             ? "bg-secondary/20 border-primary/15 text-primary/35 cursor-default"
-            : "bg-secondary/40 border-primary/20 text-primary/80 hover:text-primary hover:bg-secondary/70 hover:border-primary/45");
+            : "bg-secondary/30 border-primary/18 text-primary/75 hover:-translate-y-0.5 hover:text-primary hover:bg-secondary/55 hover:border-primary/40 hover:shadow-[0_12px_24px_-16px_rgba(255,191,90,0.65)]");
 
         if (isPlaceholder) {
           return (

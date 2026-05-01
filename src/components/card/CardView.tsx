@@ -1,14 +1,14 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import { QRCodeSVG } from "qrcode.react";
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
-import type { Profile, CardLayout } from "@/types";
+import type { Profile } from "@/types";
 import ExplorePanel from "./ExplorePanel";
 import HeroSlider, { kbImagesToSlides } from "./HeroSlider";
 import FeatureIcons from "./FeatureIcons";
 import FooterBar from "./FooterBar";
+import LayoutTuner, { type LayoutTunerValues } from "./LayoutTuner";
 import { CalendarDays, Download, X } from "lucide-react";
 import { applyTheme, getCardTypographyStyles } from "@/lib/theme";
 import { apiClient as db, type KbImage } from "@/lib/apiClient";
@@ -33,7 +33,7 @@ export interface CardViewProps {
 }
 
 const PANEL_CLASS =
-  "rounded-2xl border border-primary/20 bg-card/50 backdrop-blur-md shadow-2xl shadow-black/40 ring-1 ring-primary/10 relative";
+  "rounded-[1.6rem] border border-primary/18 bg-card/55 backdrop-blur-xl shadow-[0_24px_80px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/5 relative overflow-hidden before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0))] before:content-['']";
 
 // Subtle dot-grid texture overlay applied to each card panel via inline style.
 const PANEL_DOT_TEXTURE: React.CSSProperties = {
@@ -42,12 +42,130 @@ const PANEL_DOT_TEXTURE: React.CSSProperties = {
   backgroundSize: "18px 18px",
 };
 
+const LAYOUT_TUNER_STORAGE_KEY = "card-layout-tuner:v1";
+
+const DEFAULT_LAYOUT_TUNER_VALUES: LayoutTunerValues = {
+  leftRatio: 20,
+  rightRatio: 28,
+  gap: 12,
+  gridShiftY: 0,
+  leftOffsetY: 0,
+  middleOffsetY: 0,
+  rightOffsetY: 0,
+  heroMinHeight: 280,
+  heroOffsetY: 0,
+  featureOffsetY: 0,
+  testimonialOffsetY: 0,
+};
+
+type DragTarget = "left" | "right";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatTrack(ratio: number) {
+  return `calc((100% - (2 * var(--card-grid-gap))) * ${ratio / 100})`;
+}
+
 const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
   const [answerKey, setAnswerKey] = useState(0);
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
+  const [layoutTunerValues, setLayoutTunerValues] = useState<LayoutTunerValues>(DEFAULT_LAYOUT_TUNER_VALUES);
+  const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const isDev = import.meta.env.DEV;
 
   const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
+
+  const middleRatio = useMemo(
+    () => 100 - layoutTunerValues.leftRatio - layoutTunerValues.rightRatio,
+    [layoutTunerValues.leftRatio, layoutTunerValues.rightRatio],
+  );
+
+  const gridTemplateColumns = useMemo(
+    () => [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio].map(formatTrack).join(" "),
+    [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio],
+  );
+
+  const rootStyle = useMemo(
+    () => ({
+      ...getCardTypographyStyles(profile?.font_family),
+      backgroundImage:
+        "radial-gradient(circle at 18% 18%, hsl(var(--primary) / 0.12), transparent 24%), radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.08), transparent 55%), radial-gradient(circle at 85% 80%, hsl(var(--primary) / 0.05), transparent 50%), linear-gradient(180deg, hsl(222 20% 7%) 0%, hsl(222 22% 5%) 100%)",
+      "--card-grid-gap": `${layoutTunerValues.gap}px`,
+      "--desktop-grid-columns": gridTemplateColumns,
+      "--card-grid-shift-y": `${layoutTunerValues.gridShiftY}px`,
+      "--profile-offset-y": `${layoutTunerValues.leftOffsetY}px`,
+      "--content-offset-y": `${layoutTunerValues.middleOffsetY}px`,
+      "--chat-offset-y": `${layoutTunerValues.rightOffsetY}px`,
+      "--hero-min-height": `${layoutTunerValues.heroMinHeight}px`,
+      "--hero-offset-y": `${layoutTunerValues.heroOffsetY}px`,
+      "--feature-offset-y": `${layoutTunerValues.featureOffsetY}px`,
+      "--testimonial-offset-y": `${layoutTunerValues.testimonialOffsetY}px`,
+    }) as React.CSSProperties,
+    [gridTemplateColumns, layoutTunerValues, profile?.font_family],
+  );
+
+  useEffect(() => {
+    if (!isDev || typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(LAYOUT_TUNER_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Partial<LayoutTunerValues>;
+      setLayoutTunerValues((current) => ({ ...current, ...parsed }));
+    } catch {
+      window.localStorage.removeItem(LAYOUT_TUNER_STORAGE_KEY);
+    }
+  }, [isDev]);
+
+  useEffect(() => {
+    if (!isDev || typeof window === "undefined") return;
+    window.localStorage.setItem(LAYOUT_TUNER_STORAGE_KEY, JSON.stringify(layoutTunerValues));
+  }, [isDev, layoutTunerValues]);
+
+  useEffect(() => {
+    if (!dragTarget || !gridRef.current) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const rect = gridRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const usableWidth = rect.width - layoutTunerValues.gap * 2;
+      if (usableWidth <= 0) return;
+
+      const minLeftRatio = (190 / usableWidth) * 100;
+      const minMiddleRatio = (360 / usableWidth) * 100;
+      const minRightRatio = (260 / usableWidth) * 100;
+
+      if (dragTarget === "left") {
+        const nextLeftRatio = clamp(
+          (((event.clientX - rect.left) - layoutTunerValues.gap / 2) / usableWidth) * 100,
+          minLeftRatio,
+          100 - layoutTunerValues.rightRatio - minMiddleRatio,
+        );
+        setLayoutTunerValues((current) => ({ ...current, leftRatio: Number(nextLeftRatio.toFixed(2)) }));
+        return;
+      }
+
+      const nextRightRatio = clamp(
+        (((rect.right - event.clientX) - layoutTunerValues.gap / 2) / usableWidth) * 100,
+        minRightRatio,
+        100 - layoutTunerValues.leftRatio - minMiddleRatio,
+      );
+      setLayoutTunerValues((current) => ({ ...current, rightRatio: Number(nextRightRatio.toFixed(2)) }));
+    };
+
+    const handleUp = () => setDragTarget(null);
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [dragTarget, layoutTunerValues.gap, layoutTunerValues.leftRatio, layoutTunerValues.rightRatio]);
 
   // Load KB images for the hero slider
   useEffect(() => {
@@ -114,22 +232,18 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   return (
     <div
       className="business-card-theme card-font-sans min-h-[100dvh] flex flex-col bg-background relative overflow-hidden"
-      style={{
-        ...getCardTypographyStyles(profile?.font_family),
-        backgroundImage:
-          "radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.08), transparent 55%), radial-gradient(circle at 85% 80%, hsl(var(--primary) / 0.05), transparent 50%)",
-      }}
+      style={rootStyle}
     >
 
       {/* ── Top nav bar ── */}
-      <header className="flex items-center justify-between px-5 py-3 flex-shrink-0">
+      <header className="flex items-center justify-between px-5 py-3.5 flex-shrink-0">
         <div className="flex items-center gap-2">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
           </svg>
-          <span className="card-font-display font-semibold text-xs text-primary tracking-wide">{siteName}</span>
+          <span className="card-font-display font-semibold text-[12px] text-primary tracking-[0.16em] uppercase">{siteName}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-primary font-medium tracking-wide">
+        <div className="flex items-center gap-1.5 text-[11px] text-primary/88 font-medium tracking-[0.12em] uppercase">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" />
           AI Concierge
         </div>
@@ -143,16 +257,58 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
       />
 
       {/* ── Three-column bento grid ── */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-[330px_1fr_380px] gap-3 px-3 pb-3 pt-3 min-h-0">
+      {/* md (768px): 2-col profile+content; xl (1280px+): add AI panel column */}
+      <div
+        ref={gridRef}
+        className="relative flex-1 grid grid-cols-1 md:grid-cols-[260px_1fr] xl:[grid-template-columns:var(--desktop-grid-columns)] px-3 pb-3 pt-3 min-h-0"
+        style={{
+          gap: "var(--card-grid-gap)",
+          transform: "translateY(var(--card-grid-shift-y))",
+        }}
+      >
+
+        {isDev && (
+          <>
+            <button
+              type="button"
+              aria-label="Resize between profile and middle panels"
+              onMouseDown={() => setDragTarget("left")}
+              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
+              style={{
+                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + (var(--card-grid-gap) / 2))`,
+              }}
+            >
+              <span className="h-10 w-1 rounded-full bg-primary/70" />
+            </button>
+            <button
+              type="button"
+              aria-label="Resize between middle and chat panels"
+              onMouseDown={() => setDragTarget("right")}
+              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
+              style={{
+                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + ${formatTrack(middleRatio)} + (var(--card-grid-gap) * 1.5))`,
+              }}
+            >
+              <span className="h-10 w-1 rounded-full bg-primary/70" />
+            </button>
+          </>
+        )}
 
         {/* ════════════════════════════════════════
             COLUMN 1 — Profile card
             ════════════════════════════════════════ */}
-        <aside className={`${PANEL_CLASS} flex flex-col overflow-y-auto`} style={PANEL_DOT_TEXTURE} aria-label="Profile">
-          <div className="flex flex-col items-center text-center px-6 pt-7 pb-6 gap-5">
+        <aside
+          className={`${PANEL_CLASS} flex flex-col overflow-y-auto`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--profile-offset-y))",
+          }}
+          aria-label="Profile"
+        >
+          <div className="flex flex-col items-center text-center px-5 md:px-6 pt-6 pb-6 gap-4.5">
 
             {/* Avatar */}
-            <div className="w-32 h-32 rounded-2xl overflow-hidden border-2 border-primary/30 shadow-lg shadow-primary/20 flex-shrink-0">
+            <div className="w-28 h-28 md:w-32 md:h-32 rounded-[1.35rem] overflow-hidden border-2 border-primary/30 shadow-[0_18px_40px_-22px_rgba(255,191,90,0.7)] flex-shrink-0">
               <img
                 src={avatarUrl}
                 alt={`${displayName} — ${tagline}`}
@@ -166,9 +322,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
 
             {/* Site name — warm burnished copper, large, centered */}
             <p
-              className="card-font-display font-bold leading-[1.05] bg-clip-text text-transparent"
+              className="card-font-display font-bold leading-[1.02] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(255,191,90,0.18)]"
               style={{
-                fontSize: "clamp(2rem, 2.8vw, 2.5rem)",
+                fontSize: "clamp(1.65rem, 2.2vw, 2.1rem)",
                 backgroundImage: "linear-gradient(180deg, hsl(var(--primary) / 0.98), hsl(var(--accent) / 0.72))",
               }}
             >
@@ -176,17 +332,17 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             </p>
 
             {/* Name + tagline */}
-            <div>
-              <p className="font-bold text-foreground text-xl leading-tight">{displayName}</p>
-              <p className="text-primary text-base font-semibold mt-1">{tagline}</p>
+            <div className="space-y-1">
+              <p className="font-semibold text-foreground text-[1.45rem] leading-tight tracking-tight">{displayName}</p>
+              <p className="text-primary text-[15px] font-semibold tracking-[0.02em]">{tagline}</p>
             </div>
 
             {/* Bio */}
-            <p className="text-muted-foreground text-[14px] leading-relaxed font-medium">{bio}</p>
+            <p className="text-muted-foreground text-[13.5px] leading-relaxed font-medium max-w-[24ch]">{bio}</p>
 
             {/* Social links */}
             {socialLinks.length > 0 && (
-              <SocialLinks links={socialLinks} />
+              <SocialLinks links={socialLinks} compact />
             )}
 
             {/* CTA buttons */}
@@ -194,7 +350,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               {ctaEmbed ? (
                 <button
                   onClick={() => setIsCtaOpen(true)}
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
                 >
                   <span className="flex items-center gap-2.5">
                     <CalendarDays className="w-[18px] h-[18px]" />
@@ -207,7 +363,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
                 >
                   <span className="flex items-center gap-2.5">
                     <CalendarDays className="w-[18px] h-[18px]" />
@@ -220,7 +376,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                 href={saveContactUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all"
+                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all"
               >
                 <Download className="w-[18px] h-[18px]" />
                 Download My One-Pager
@@ -232,54 +388,75 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         {/* ════════════════════════════════════════
             COLUMN 2 — Hero + features + testimonial
             ════════════════════════════════════════ */}
-        <main className={`${PANEL_CLASS} flex flex-col overflow-hidden min-w-0`} style={PANEL_DOT_TEXTURE} aria-label="Content">
-
-          {/* Hero image — grows to absorb leftover panel height */}
-          <div className="p-3 pb-3 flex-1 min-h-[280px]">
-            <div className="relative w-full h-full">
-              <HeroSlider
-                slides={heroSlides}
-                headline={heroHeadline}
-                subheadline={heroSubheadline}
-              />
-            </div>
-          </div>
-
-          {/* Feature icons — bare 4-column row */}
-          <div className="px-5 py-3 flex-shrink-0">
-            <FeatureIcons
-              services={serviceItems}
-              minSlots={Math.max(4, serviceItems.length || 0)}
-              defaultCtaLabel={ctaLabel || "Sign Up"}
-              defaultCtaUrl={ctaUrl}
+        <main
+          className={`${PANEL_CLASS} flex min-w-0 overflow-hidden relative`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--content-offset-y))",
+          }}
+          aria-label="Content"
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              transform: "translateY(var(--hero-offset-y))",
+            }}
+          >
+            <HeroSlider
+              slides={heroSlides}
+              headline={heroHeadline}
+              subheadline={heroSubheadline}
+              controlsBottomClassName="bottom-[17rem] md:bottom-[18rem]"
+              overlayClassName="justify-start px-6 md:px-7 pt-7 md:pt-8"
             />
           </div>
 
-          {/* Testimonial — sits naturally below */}
-          {testimonialText && (
-            <div className="mx-3 mb-3 flex-shrink-0">
-              <div className="rounded-xl border border-primary/20 bg-secondary/15 px-5 py-4">
-                <blockquote className="flex items-start gap-3">
-                  <span className="card-font-display text-primary text-3xl leading-none flex-shrink-0 -mt-1">&ldquo;</span>
-                  <div className="min-w-0">
-                    <p className="text-foreground/90 text-[15px] leading-relaxed font-medium">{testimonialText.replace(/^[“"]|[”"]$/g, "")}</p>
-                    {testimonialAuthor && (
-                      <footer className="mt-2 text-primary text-[13px] font-semibold tracking-wide">{testimonialAuthor}</footer>
-                    )}
-                  </div>
-                </blockquote>
-              </div>
+          <div className="relative z-10 mt-auto flex w-full flex-col bg-gradient-to-t from-black/88 via-black/52 to-transparent pt-36 md:pt-40">
+            <div
+              className="px-4 md:px-5 pb-3 flex-shrink-0"
+              style={{ transform: "translateY(var(--feature-offset-y))" }}
+            >
+              <FeatureIcons
+                services={serviceItems}
+                minSlots={Math.max(4, serviceItems.length || 0)}
+              />
             </div>
-          )}
+
+            {testimonialText && (
+              <div className="mx-3 mb-3 flex-shrink-0" style={{ transform: "translateY(var(--testimonial-offset-y))" }}>
+                <div className="rounded-xl border border-white/12 bg-black/42 backdrop-blur-sm px-5 py-4 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.85)]">
+                  <blockquote className="flex items-start gap-3">
+                    <span className="card-font-display text-primary text-3xl leading-none flex-shrink-0 -mt-1">&ldquo;</span>
+                    <div className="min-w-0">
+                      <p className="text-foreground/92 text-[15px] leading-relaxed font-medium">{testimonialText.replace(/^[“"]|[”"]$/g, "")}</p>
+                      {testimonialAuthor && (
+                        <footer className="mt-2 text-primary text-[13px] font-semibold tracking-wide">{testimonialAuthor}</footer>
+                      )}
+                    </div>
+                  </blockquote>
+                </div>
+              </div>
+            )}
+          </div>
         </main>
 
         {/* ════════════════════════════════════════
             COLUMN 3 — AI Concierge panel
+            At md: spans both columns below profile+content
+            At xl: becomes the 3rd column
             ════════════════════════════════════════ */}
-        <aside className={`${PANEL_CLASS} flex flex-col overflow-hidden min-w-0`} style={PANEL_DOT_TEXTURE} aria-label="AI Concierge">
+        <aside
+          className={`${PANEL_CLASS} flex flex-col overflow-hidden min-w-0 md:col-span-2 xl:col-span-1 min-h-[420px] xl:min-h-0`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--chat-offset-y))",
+          }}
+          aria-label="AI Concierge"
+        >
           <ExplorePanel
             siteId={siteId}
             profileId={profileId}
+            assistantAvatarUrl={avatarUrl}
             onClose={() => { }}
             onAnswer={handleAnswer}
             hideBanner
@@ -321,6 +498,14 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             />
           </motion.div>
         </div>
+      )}
+
+      {isDev && (
+        <LayoutTuner
+          values={layoutTunerValues}
+          onChange={setLayoutTunerValues}
+          onReset={() => setLayoutTunerValues(DEFAULT_LAYOUT_TUNER_VALUES)}
+        />
       )}
 
     </div>

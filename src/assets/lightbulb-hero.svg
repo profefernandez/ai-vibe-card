@@ -1,0 +1,63 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#090B0F"/>
+  <rect width="1600" height="900" fill="url(#bgGlow)"/>
+  <rect width="1600" height="900" fill="url(#vignette)"/>
+  <g opacity="0.18" filter="url(#blurA)">
+    <circle cx="1070" cy="260" r="250" fill="#F0B352"/>
+  </g>
+  <g opacity="0.14" filter="url(#blurB)">
+    <circle cx="940" cy="560" r="320" fill="#D98A2C"/>
+  </g>
+  <g opacity="0.22">
+    <rect x="0" y="0" width="1600" height="900" fill="url(#grid)"/>
+  </g>
+  <g transform="translate(905 188) scale(0.88)">
+    <g opacity="0.95">
+      <ellipse cx="133" cy="95" rx="170" ry="170" fill="url(#halo)" opacity="0.32"/>
+      <path d="M266 106C266 32.859 206.141 -27 133 -27C59.859 -27 0 32.859 0 106C0 160.239 31.624 206.32 80.661 228.128C96.626 235.227 107 251.056 107 268.529V296C107 306.493 115.507 315 126 315H140C150.493 315 159 306.493 159 296V268.529C159 251.056 169.374 235.227 185.339 228.128C234.376 206.32 266 160.239 266 106Z" fill="url(#bulbFill)"/>
+      <path d="M95 335C95 324.507 103.507 316 114 316H152C162.493 316 171 324.507 171 335V352C171 390.108 140.108 421 102 421H164C125.892 421 95 390.108 95 352V335Z" fill="#714B1D"/>
+      <rect x="101" y="420" width="64" height="22" rx="11" fill="#A8742F"/>
+      <rect x="110" y="445" width="46" height="20" rx="10" fill="#C88E37"/>
+      <path d="M133 15L145.836 55.0771H188L153.082 80.8458L165.918 120.923L133 95.1542L100.082 120.923L112.918 80.8458L78 55.0771H120.164L133 15Z" fill="#FFF3BF" opacity="0.95"/>
+      <circle cx="133" cy="111" r="100" stroke="#FFE3A5" stroke-width="14" opacity="0.42"/>
+      <path d="M133 -54L133 -102" stroke="#F2B84B" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+      <path d="M59 -38L35 -79" stroke="#F2B84B" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+      <path d="M209 -38L233 -79" stroke="#F2B84B" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+      <path d="M9 25L-33 1" stroke="#F2B84B" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+      <path d="M257 25L299 1" stroke="#F2B84B" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
+    </g>
+  </g>
+  <defs>
+    <filter id="blurA" x="620" y="-190" width="900" height="900" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="100" result="effect1_foregroundBlur"/>
+    </filter>
+    <filter id="blurB" x="220" y="-160" width="1440" height="1440" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="200" result="effect1_foregroundBlur"/>
+    </filter>
+    <linearGradient id="bgGlow" x1="203" y1="85" x2="1220" y2="809" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14171D"/>
+      <stop offset="0.42" stop-color="#101217"/>
+      <stop offset="1" stop-color="#07080C"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(133 95) rotate(90) scale(185)">
+      <stop stop-color="#F8D06A"/>
+      <stop offset="1" stop-color="#F8D06A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bulbFill" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(133 62) rotate(90) scale(260)">
+      <stop stop-color="#FFF3BE"/>
+      <stop offset="0.55" stop-color="#F0B64A"/>
+      <stop offset="1" stop-color="#AD6C22"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(800 450) rotate(90) scale(620 980)">
+      <stop offset="0.62" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.62"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    </pattern>
+  </defs>
+</svg>

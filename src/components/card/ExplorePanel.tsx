@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown";
 interface ExplorePanelProps {
   siteId?: string | null;
   profileId?: string | null;
+  assistantAvatarUrl?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
   /** Called each time a new AI answer lands — used by the desktop layout
@@ -93,6 +94,7 @@ async function postFeedback(payload: {
 const ExplorePanel = ({
   siteId,
   profileId,
+  assistantAvatarUrl,
   onSearch,
   onClose,
   onAnswer,
@@ -263,12 +265,13 @@ const ExplorePanel = ({
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       {alwaysOpen ? (
-        <div className="px-5 pt-6 pb-4 flex-shrink-0">
+        <div className="px-5 pt-6 pb-4 flex-shrink-0 border-b border-border/20 bg-gradient-to-b from-primary/6 to-transparent">
           <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" />
-            <p className="card-font-display text-xl font-bold text-primary tracking-tight">AI Concierge</p>
+            <span className="inline-flex h-6 items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              AI Concierge
+            </span>
           </div>
-          <p className="text-[13.5px] text-muted-foreground/90 leading-relaxed font-medium">
+          <p className="text-[13px] text-muted-foreground/90 leading-relaxed font-medium max-w-[28ch]">
             Ask me anything about AI literacy, strategy, or working together.
           </p>
         </div>
@@ -306,11 +309,15 @@ const ExplorePanel = ({
               {/* Welcome chat bubble — only in alwaysOpen mode */}
               {alwaysOpen && (
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full bg-secondary border border-border/40 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[11px] font-bold text-primary">AI</span>
+                  <div className="w-10 h-10 rounded-full bg-secondary border border-border/40 overflow-hidden flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-black/20">
+                    {assistantAvatarUrl ? (
+                      <img src={assistantAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[11px] font-bold text-primary">AI</span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="rounded-2xl rounded-tl-sm bg-secondary/40 border border-border/30 px-4 py-3">
+                    <div className="rounded-2xl rounded-tl-sm bg-secondary/35 border border-border/30 px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                       <p className="text-[14px] text-foreground/95 leading-relaxed font-medium">
                         Hi! I'm here to help you explore how AI literacy can create clarity, build capability, and drive real impact. What would you like to know?
                       </p>
@@ -328,11 +335,11 @@ const ExplorePanel = ({
                   <button
                     key={s}
                     onClick={() => handleSearch(s)}
-                    className="w-full text-left group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-border/30 bg-secondary/20 hover:bg-primary/5 hover:border-primary/30 transition-all duration-200"
+                    className="w-full text-left group flex items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-border/30 bg-secondary/15 hover:bg-primary/6 hover:border-primary/32 hover:translate-y-[-1px] transition-all duration-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
                   >
                     <span className="flex items-center gap-3 min-w-0">
                       {alwaysOpen && (
-                        <span className="text-primary/80 text-lg font-light flex-shrink-0 leading-none">+</span>
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-primary/18 bg-primary/8 text-primary/80 text-sm font-light flex-shrink-0 leading-none">+</span>
                       )}
                       <span className="text-[14px] text-foreground/85 group-hover:text-foreground transition-colors truncate font-semibold">{s}</span>
                     </span>
@@ -409,14 +416,14 @@ const ExplorePanel = ({
 
       {/* ── Persistent input at bottom — desktop alwaysOpen mode only ── */}
       {alwaysOpen && (
-        <div className="px-5 pt-3 pb-4 border-t border-border/20 flex-shrink-0">
+        <div className="px-5 pt-3 pb-4 border-t border-border/20 flex-shrink-0 bg-gradient-to-t from-black/10 to-transparent">
           <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative flex items-center">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type your question..."
               aria-label="Ask the AI Concierge"
-              className="w-full bg-secondary/30 border border-border/40 rounded-xl pl-4 pr-12 py-3 text-[14px] font-medium text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+              className="w-full bg-secondary/26 border border-border/40 rounded-2xl pl-4 pr-12 py-3 text-[14px] font-medium text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
             />
             <button
               type="submit"
