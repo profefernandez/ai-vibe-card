@@ -6,6 +6,7 @@ import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import type { Profile, CardLayout } from "@/types";
 import ExplorePanel from "./ExplorePanel";
+import PhotoStage from "./PhotoStage";
 import { Search, ChevronLeft, Calendar, X } from "lucide-react";
 import { applyTheme } from "@/lib/theme";
 
@@ -32,6 +33,13 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
   const [isScanOpen, setIsScanOpen] = useState(false);
+  /**
+   * answerKey — incremented each time the AI delivers a new answer.
+   * Passed to both ExplorePanel (to notify it) and PhotoStage (to advance the gallery).
+   * Starts at 0 so the initial mount does NOT trigger a photo advance.
+   */
+  const [answerKey, setAnswerKey] = useState(0);
+  const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!profile || !applyMeta) return;
@@ -71,7 +79,6 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const ctaEmbed = profile?.cta_embed || "";
   const socialLinks = profile?.social_links || [];
   const cardLayout: CardLayout = profile?.card_layout || "classic";
-  // Brand name — editable via profile.site_name, falls back to a sensible default.
   const siteName = profile?.site_name || "60 Watts of Clarity";
 
   const dragX = useMotionValue(0);
@@ -106,6 +113,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           isExpanded ? "max-w-5xl" : "max-w-lg"
         }`}
       >
+        {/* Background decorations */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
           <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/5 blur-3xl" />
           <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-amber-500/5 blur-2xl" />
@@ -119,8 +127,16 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <div className="absolute top-1/3 -left-20 w-[140%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent rotate-[-8deg]" />
         </div>
 
-        {/* On mobile, expanded panels stack vertically. On md+ they sit side-by-side. */}
+        {/*
+          ─────────────────────────────────────────────────────────────────────
+          BENTO GRID — three columns on desktop when Explore is open:
+            [profile sidebar]  |  [PhotoStage centre]  |  [ExplorePanel right]
+          On mobile the columns stack vertically (flex-col).
+          ─────────────────────────────────────────────────────────────────────
+        */}
         <div className="relative z-10 flex flex-col md:flex-row h-full">
+
+          {/* ── Column 1: Profile card ── */}
           <motion.div
             layout
             drag={!isExpanded ? "x" : false}
@@ -135,7 +151,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             }`}
           >
             {(cardLayout === "classic" || isExpanded) && (
-              <div className={`flex flex-col items-center w-full`}>
+              <div className="flex flex-col items-center w-full">
                 <motion.h1
                   layout="position"
                   className={`font-display font-semibold text-gradient-amber tracking-tight text-center ${
@@ -234,6 +250,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               </div>
             )}
 
+            {/* Action buttons */}
             <div className={`flex gap-3 flex-wrap ${
               isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"
             }`}>
@@ -292,22 +309,40 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                 Open explore panel
               </button>
             )}
-
           </motion.div>
+          {/* ── End Column 1 ── */}
 
+          {/* ── Column 2: PhotoStage — visible on md+ when Explore is open ── */}
+          <AnimatePresence>
+            {isExploreOpen && (
+              <motion.div
+                key="photo-stage"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ type: "spring", damping: 32, stiffness: 220 }}
+                className="hidden md:block md:w-64 flex-shrink-0 border-r border-border/30 overflow-hidden"
+                aria-label="Photo gallery"
+              >
+                <PhotoStage profileId={profileId} answerKey={answerKey} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* ── End Column 2 ── */}
+
+          {/* ── Column 3: Explore / CTA / Scan panels ── */}
           <AnimatePresence mode="popLayout">
             {isExploreOpen && (
               <motion.div
+                key="explore"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="flex-1 min-w-0 relative md:[height:unset] md:[animation:none]"
-                style={{}}
+                className="flex-1 min-w-0 relative md:[height:unset]"
                 role="region"
                 aria-label="Explore panel"
               >
-                {/* On md+ use width animation, on mobile use height */}
                 <motion.div
                   className="h-full"
                   initial={{ opacity: 0 }}
@@ -321,7 +356,18 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <ExplorePanel siteId={siteId} profileId={profileId} onClose={closeExplore} />
+                  {/*
+                    hideBanner suppresses the polaroid strip inside ExplorePanel on desktop
+                    because PhotoStage (column 2) is already showing the gallery.
+                    onAnswer increments answerKey so PhotoStage advances on every AI reply.
+                  */}
+                  <ExplorePanel
+                    siteId={siteId}
+                    profileId={profileId}
+                    onClose={closeExplore}
+                    onAnswer={handleAnswer}
+                    hideBanner
+                  />
                 </motion.div>
               </motion.div>
             )}
@@ -345,7 +391,6 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                 >
                   <X className="w-4 h-4" />
                 </button>
-
                 <div
                   className="flex-1 w-full h-full min-h-[60vh] p-4 pt-14 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:min-h-[55vh] [&>iframe]:border-0 [&>iframe]:rounded-xl"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ctaEmbed, { ADD_TAGS: ["iframe"], ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling"] }) }}
@@ -379,6 +424,8 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               </motion.div>
             )}
           </AnimatePresence>
+          {/* ── End Column 3 ── */}
+
         </div>
       </motion.div>
     </section>
