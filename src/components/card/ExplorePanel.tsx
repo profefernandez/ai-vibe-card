@@ -13,10 +13,14 @@ interface ExplorePanelProps {
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+// Maximum characters forwarded to the AI. Prevents context-window stuffing
+// and reduces prompt-injection surface area.
+const MAX_QUERY_LENGTH = 600;
+
 type FeedbackRating = "up" | "down";
 type FeedbackStatus = "idle" | "pending-comment" | "submitting" | "done";
 
-// ── SVG icons ─────────────────────────────────────────────────────────────────
+// ── SVG icons ─────────────────────────────────────────────────────────────────────────────────
 const SearchIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <circle cx="11" cy="11" r="8" />
@@ -127,6 +131,20 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
     setFeedbackComment("");
   }, [activeQuery, answer]);
 
+  // ── Reset to a fresh conversation ──────────────────────────────────────────────────
+  const handleNewChat = () => {
+    setActiveQuery(null);
+    setAnswer(null);
+    setConversationId(null);
+    setFeedbackToken(null);
+    setBoundProfileId(null);
+    setFeedbackStatus("idle");
+    setFeedbackRating(null);
+    setFeedbackComment("");
+    setNoContent(false);
+    setQuery("");
+  };
+
   const handleRate = (rating: FeedbackRating) => {
     if (feedbackStatus !== "idle") return;
     if (!feedbackToken) return; // can't submit without a server-issued token
@@ -148,8 +166,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
       // Thumbs-down: open the comment field. Submission happens on Send so
       // we use the single-use token exactly once (per-response). If the user
       // navigates away without clicking Send the rating is dropped — this
-      // is the cost of replay-safe single-use tokens, and it lines up with
-      // the security trade-off discussed in the API plan (Phase 4 / M7).
+      // is the cost of replay-safe single-use tokens.
       setFeedbackStatus("pending-comment");
     }
   };
@@ -174,7 +191,8 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   };
 
   const handleSearch = async (text?: string) => {
-    const searchText = text || query.trim();
+    // Trim and enforce MAX_QUERY_LENGTH to prevent context-window stuffing.
+    const searchText = (text || query.trim()).slice(0, MAX_QUERY_LENGTH);
     if (!searchText) return;
 
     setActiveQuery(searchText);
@@ -228,7 +246,9 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
       {currentBanner && (
         <div className="px-6 pt-6 pb-2 flex flex-col items-center">
           <div className="relative w-full max-w-sm">
-            <div className="bg-white p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
+            {/* Use bg-card instead of bg-white so the frame looks correct in both
+                light and dark mode. A slight warm tint is preserved via border. */}
+            <div className="bg-card border border-border/20 p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
               <AnimatePresence mode="wait">
                 <motion.img
                   key={currentBanner.id}
@@ -242,7 +262,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                 />
               </AnimatePresence>
               {currentBanner.caption && (
-                <p className="text-xs text-neutral-700 text-center mt-2 font-sans italic line-clamp-1">
+                <p className="text-xs text-muted-foreground text-center mt-2 font-sans italic line-clamp-1">
                   {currentBanner.caption}
                 </p>
               )}
@@ -253,9 +273,27 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-          Explore
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            Explore
+          </p>
+          {/* New chat button — only visible once a conversation is underway. */}
+          {conversationId && (
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="text-[11px] text-muted-foreground/60 hover:text-foreground transition-colors flex items-center gap-1"
+              aria-label="Start a new conversation"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="10" y1="10" x2="14" y2="10" />
+              </svg>
+              New chat
+            </button>
+          )}
+        </div>
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
           className="relative flex items-center"
@@ -268,6 +306,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search or ask anything\u2026"
             aria-label="Explore search"
+            maxLength={MAX_QUERY_LENGTH}
             className="w-full bg-secondary/50 border border-border/40 rounded-xl pl-10 pr-11 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
           />
           <button
@@ -342,6 +381,10 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
+              // aria-live so screen readers announce the incoming answer
+              // without the user needing to navigate to it manually.
+              aria-live="polite"
+              aria-atomic="false"
               className="space-y-4"
             >
               <div className="flex items-center gap-2">
@@ -424,6 +467,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   placeholder="Ask a follow-up\u2026"
+                  maxLength={MAX_QUERY_LENGTH}
                   className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
                 />
                 <button
@@ -438,16 +482,28 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
             </motion.div>
           )}
 
-          {/* No content state */}
+          {/* No content / error state */}
           {activeQuery && !loading && noContent && (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-16 gap-3 text-center"
+              className="flex flex-col items-center justify-center py-16 gap-4 text-center"
             >
-              <p className="text-sm text-muted-foreground">No results found for that query.</p>
+              {/* Warm empty-state illustration */}
+              <div className="w-12 h-12 rounded-full bg-muted/30 flex items-center justify-center text-muted-foreground/50">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <line x1="11" y1="8" x2="11" y2="11" />
+                  <circle cx="11" cy="14" r="0.5" fill="currentColor" />
+                </svg>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground/80">Nothing found for that query.</p>
+                <p className="text-xs text-muted-foreground max-w-[22ch] mx-auto">Try rephrasing or pick a suggestion below.</p>
+              </div>
               <button
                 onClick={() => { setActiveQuery(null); setNoContent(false); }}
                 className="text-xs text-primary hover:underline"

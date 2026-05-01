@@ -28,6 +28,47 @@ export interface CardViewProps {
   applyMeta?: boolean;
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────────────────────
+// Shown while profile data is loading. Uses the same outer shell as the real
+// card so the layout doesn't shift when data arrives.
+const CardSkeleton = () => (
+  <section
+    className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8"
+    aria-label="Loading business card"
+    aria-busy="true"
+  >
+    <div className="w-full max-w-lg rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden p-8">
+      <div className="flex flex-col items-center gap-4">
+        {/* site name */}
+        <div className="h-7 w-44 rounded-lg bg-primary/10 animate-pulse" />
+        {/* avatar */}
+        <div className="w-24 h-24 rounded-full bg-muted/30 animate-pulse ring-1 ring-primary/10" />
+        {/* display name */}
+        <div className="h-6 w-36 rounded-lg bg-muted/40 animate-pulse" />
+        {/* tagline */}
+        <div className="h-4 w-52 rounded-lg bg-muted/25 animate-pulse" />
+        {/* bio lines */}
+        <div className="w-full max-w-xs space-y-2 mt-1">
+          <div className="h-3 w-full rounded bg-muted/20 animate-pulse" />
+          <div className="h-3 w-5/6 mx-auto rounded bg-muted/20 animate-pulse" />
+          <div className="h-3 w-3/4 mx-auto rounded bg-muted/20 animate-pulse" />
+        </div>
+        {/* social icons */}
+        <div className="flex gap-3 mt-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="w-9 h-9 rounded-full bg-muted/25 animate-pulse" />
+          ))}
+        </div>
+        {/* action buttons */}
+        <div className="flex gap-3 mt-4 w-full max-w-xs">
+          <div className="h-12 flex-1 rounded-full bg-primary/15 animate-pulse" />
+          <div className="h-12 flex-1 rounded-full bg-muted/20 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
 const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
   const [isExploreOpen, setIsExploreOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
@@ -62,17 +103,20 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
     setMetaTag("twitter:card", "summary_large_image");
   }, [profile, applyMeta]);
 
-  const displayName = profile?.display_name || "Tanya Williams";
-  const tagline = profile?.tagline || "Founder & AI Consultant";
-  const bio = profile?.bio || "No-code AI agent training for social work professionals.\nGrounded in the NASW Code of Ethics.";
-  const avatarUrl = profile?.avatar_url || profilePhoto;
-  const ctaUrl = profile?.cta_url || "#";
-  const ctaLabel = profile?.cta_label || "Get in Touch";
-  const ctaEmbed = profile?.cta_embed || "";
-  const socialLinks = profile?.social_links || [];
-  const cardLayout: CardLayout = profile?.card_layout || "classic";
+  // Show skeleton while profile is loading (null = not yet fetched).
+  if (profile === null) return <CardSkeleton />;
+
+  const displayName = profile.display_name || "Tanya Williams";
+  const tagline = profile.tagline || "Founder & AI Consultant";
+  const bio = profile.bio || "No-code AI agent training for social work professionals.\nGrounded in the NASW Code of Ethics.";
+  const avatarUrl = profile.avatar_url || profilePhoto;
+  const ctaUrl = profile.cta_url || "#";
+  const ctaLabel = profile.cta_label || "Get in Touch";
+  const ctaEmbed = profile.cta_embed || "";
+  const socialLinks = profile.social_links || [];
+  const cardLayout: CardLayout = profile.card_layout || "classic";
   // Brand name — editable via profile.site_name, falls back to a sensible default.
-  const siteName = profile?.site_name || "60 Watts of Clarity";
+  const siteName = profile.site_name || "60 Watts of Clarity";
 
   const dragX = useMotionValue(0);
   const DRAG_THRESHOLD = -80;
@@ -101,7 +145,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         layout
         transition={{ type: "spring", damping: 32, stiffness: 220 }}
         role="region"
-        aria-label={`${displayName} — ${tagline}`}
+        aria-label={`${displayName} \u2014 ${tagline}`}
         className={`relative w-full rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden ${
           isExpanded ? "max-w-5xl" : "max-w-lg"
         }`}
@@ -145,10 +189,12 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   {siteName}
                 </motion.h1>
 
+                {/* Classic layout avatar now includes the same glow as the bold layout
+                    for visual consistency and brand polish. */}
                 <motion.div
                   layout="position"
                   className={`rounded-full overflow-hidden border border-primary/40 ${
-                    isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4"
+                    isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4 glow-amber"
                   } transition-all duration-300`}
                 >
                   <img
@@ -234,12 +280,16 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               </div>
             )}
 
+            {/* Action buttons.
+                flex-1 lets each button share available space on very small screens
+                (320px) without overflowing. sm:flex-none restores fixed widths on
+                larger viewports. */}
             <div className={`flex gap-3 flex-wrap ${
               isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"
             }`}>
               <button
                 onClick={openExplore}
-                className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-base glow-amber hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 min-w-[150px]"
+                className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-base glow-amber hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 flex-1 sm:flex-none sm:min-w-[150px]"
               >
                 <Search className="w-4 h-4" />
                 Explore
@@ -247,7 +297,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               {ctaEmbed ? (
                 <button
                   onClick={openCta}
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm flex-1 sm:flex-none sm:min-w-[150px]"
                 >
                   <Calendar className="w-4 h-4" />
                   {ctaLabel}
@@ -257,7 +307,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                   href={ctaUrl || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm flex-1 sm:flex-none sm:min-w-[150px]"
                 >
                   <Calendar className="w-4 h-4" />
                   {ctaLabel}
@@ -266,7 +316,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
               {showScanLink && (
                 <button
                   onClick={openScan}
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm flex-1 sm:flex-none sm:min-w-[150px]"
                   aria-label="Show QR code to scan"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -303,11 +353,9 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ type: "spring", damping: 32, stiffness: 220 }}
                 className="flex-1 min-w-0 relative md:[height:unset] md:[animation:none]"
-                style={{}}
                 role="region"
                 aria-label="Explore panel"
               >
-                {/* On md+ use width animation, on mobile use height */}
                 <motion.div
                   className="h-full"
                   initial={{ opacity: 0 }}
