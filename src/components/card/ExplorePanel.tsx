@@ -9,6 +9,15 @@ interface ExplorePanelProps {
   profileId?: string | null;
   onSearch?: (query: string) => void;
   onClose?: () => void;
+  /** Called each time a new AI answer lands — used by the desktop layout
+   *  to advance the PhotoStage carousel in the centre column. */
+  onAnswer?: () => void;
+  /** When true the top polaroid banner is suppressed — the desktop layout
+   *  renders photos in its own dedicated centre column instead. */
+  hideBanner?: boolean;
+  /** When true the panel is always expanded and fills its parent container.
+   *  Used by the desktop 3-column layout where the panel is a permanent column. */
+  alwaysOpen?: boolean;
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -81,7 +90,15 @@ async function postFeedback(payload: {
   }
 }
 
-const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProps) => {
+const ExplorePanel = ({
+  siteId,
+  profileId,
+  onSearch,
+  onClose,
+  onAnswer,
+  hideBanner = false,
+  alwaysOpen = false,
+}: ExplorePanelProps) => {
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -89,21 +106,15 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   const [loading, setLoading] = useState(false);
   const [noContent, setNoContent] = useState(false);
 
-  // Per-response binding values — the server returns a single-use HMAC
-  // feedback_token bound to (profile_id, conversation_id, hash(answer))
-  // when this exact response was generated. Without it the API rejects
-  // feedback. profile_id from chat response overrides the prop default
-  // when present (the server resolves the site owner authoritatively).
   const [feedbackToken, setFeedbackToken] = useState<string | null>(null);
   const [boundProfileId, setBoundProfileId] = useState<string | null>(null);
 
-  // Feedback state — scoped to the currently displayed assistant reply.
-  // Reset on every new query/answer so each reply gets its own rating.
   const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
 
-  // Banner slideshow — advances one slot per Q&A turn, hidden when empty.
+  // Banner slideshow — suppressed when hideBanner=true (desktop centre column
+  // owns photo display instead) or when alwaysOpen=true.
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [kbIndex, setKbIndex] = useState(0);
 
@@ -120,6 +131,7 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
   }, [answer]);
 
   const currentBanner = kbImages.length > 0 ? kbImages[kbIndex % kbImages.length] : null;
+  const showBanner = !hideBanner && !alwaysOpen && currentBanner;
 
   useEffect(() => {
     setFeedbackStatus("idle");
@@ -129,12 +141,9 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
 
   const handleRate = (rating: FeedbackRating) => {
     if (feedbackStatus !== "idle") return;
-    if (!feedbackToken) return; // can't submit without a server-issued token
-
+    if (!feedbackToken) return;
     setFeedbackRating(rating);
-
     if (rating === "up") {
-      // Thumbs-up: submit immediately, no comment prompt.
       setFeedbackStatus("done");
       void postFeedback({
         profile_id: boundProfileId ?? profileId ?? null,
@@ -145,20 +154,12 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         feedback_token: feedbackToken,
       });
     } else {
-      // Thumbs-down: open the comment field. Submission happens on Send so
-      // we use the single-use token exactly once (per-response). If the user
-      // navigates away without clicking Send the rating is dropped — this
-      // is the cost of replay-safe single-use tokens, and it lines up with
-      // the security trade-off discussed in the API plan (Phase 4 / M7).
       setFeedbackStatus("pending-comment");
     }
   };
 
   const handleSubmitComment = () => {
-    if (!feedbackRating || !feedbackToken) {
-      setFeedbackStatus("done");
-      return;
-    }
+    if (!feedbackRating || !feedbackToken) { setFeedbackStatus("done"); return; }
     const trimmed = feedbackComment.trim();
     setFeedbackStatus("submitting");
     void postFeedback({
@@ -203,14 +204,13 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         profile_id?: string;
       };
       if (result.conversation_id) setConversationId(result.conversation_id);
-      // Capture the binding values returned with the response so the
-      // visitor can echo them on /api/feedback. profile_id from the
-      // server is authoritative (the site owner) and overrides the prop.
       setFeedbackToken(result.feedback_token ?? null);
       setBoundProfileId(result.profile_id ?? null);
 
       if (result.response) {
         setAnswer(result.response);
+        // ← Notify CardView so the desktop PhotoStage advances to the next image.
+        onAnswer?.();
       } else {
         setNoContent(true);
       }
@@ -221,19 +221,25 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-background">
+  // ── alwaysOpen = desktop column mode ─────────────────────────────────────
+  // The panel fills its parent flex container completely. No collapse chrome.
+  const panelClasses = alwaysOpen
+    ? "flex flex-col h-full min-h-0 bg-background"
+    : "flex flex-col h-full bg-background";
 
-      {/* Framed banner slideshow — advances per Q&A turn. */}
-      {currentBanner && (
+  return (
+    <div className={panelClasses}>
+
+      {/* ── Polaroid banner (mobile only / hideBanner=false / alwaysOpen=false) */}
+      {showBanner && (
         <div className="px-6 pt-6 pb-2 flex flex-col items-center">
           <div className="relative w-full max-w-sm">
             <div className="bg-white p-3 pb-5 rounded-md shadow-lg shadow-black/30 rotate-[-0.5deg]">
               <AnimatePresence mode="wait">
                 <motion.img
-                  key={currentBanner.id}
-                  src={currentBanner.url}
-                  alt={currentBanner.caption || "Image"}
+                  key={currentBanner!.id}
+                  src={currentBanner!.url}
+                  alt={currentBanner!.caption || "Image"}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -241,9 +247,9 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                   className="w-full aspect-[4/3] object-cover rounded-sm"
                 />
               </AnimatePresence>
-              {currentBanner.caption && (
+              {currentBanner!.caption && (
                 <p className="text-xs text-neutral-700 text-center mt-2 font-sans italic line-clamp-1">
-                  {currentBanner.caption}
+                  {currentBanner!.caption}
                 </p>
               )}
             </div>
@@ -251,29 +257,38 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         </div>
       )}
 
-      {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
-          Explore
-        </p>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="px-5 pt-5 pb-4 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
+        {/* Column title — only shown in alwaysOpen desktop mode */}
+        {alwaysOpen && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <p className="text-xs font-semibold text-primary uppercase tracking-widest">
+              AI Concierge
+            </p>
+          </div>
+        )}
+        {!alwaysOpen && (
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">
+            Explore
+          </p>
+        )}
         <form
           onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
           className="relative flex items-center"
         >
-          <span className="absolute left-3.5 text-muted-foreground/50">
-            <SearchIcon />
-          </span>
+          <span className="absolute left-3.5 text-muted-foreground/50"><SearchIcon /></span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search or ask anything\u2026"
-            aria-label="Explore search"
+            placeholder="Ask me anything…"
+            aria-label="AI Concierge search"
             className="w-full bg-secondary/50 border border-border/40 rounded-xl pl-10 pr-11 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
           />
           <button
             type="submit"
             disabled={!query.trim() || loading}
-            aria-label="Search"
+            aria-label="Send"
             className="absolute right-2 w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-25 hover:opacity-90 active:scale-95 transition-all"
           >
             {loading ? <SpinnerIcon /> : <ArrowIcon />}
@@ -281,22 +296,13 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
         </form>
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      {/* ── Content — scrollable ───────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0">
         <AnimatePresence mode="wait">
 
-          {/* Suggestions state */}
           {!activeQuery && (
-            <motion.div
-              key="suggestions"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-5"
-            >
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">
-                Suggested questions
-              </p>
+            <motion.div key="suggestions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">Suggested questions</p>
               <div className="space-y-2">
                 {EXPLORE_SUGGESTIONS.map((s) => (
                   <button
@@ -304,54 +310,32 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                     onClick={() => handleSearch(s)}
                     className="w-full text-left group flex items-center justify-between px-4 py-3 rounded-xl border border-border/30 bg-secondary/30 hover:bg-primary/5 hover:border-primary/25 transition-all duration-200"
                   >
-                    <span className="text-sm text-foreground/75 group-hover:text-foreground transition-colors">
-                      {s}
-                    </span>
-                    <span className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors">
-                      <ArrowIcon />
-                    </span>
+                    <span className="text-sm text-foreground/75 group-hover:text-foreground transition-colors">{s}</span>
+                    <span className="text-muted-foreground/40 group-hover:text-primary/60 transition-colors"><ArrowIcon /></span>
                   </button>
                 ))}
               </div>
               <div className="pt-4 border-t border-border/20">
-                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
-                  Powered by AI \u00b7 Grounded in the NASW Code of Ethics
-                </p>
+                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">Powered by AI · Grounded in the NASW Code of Ethics</p>
               </div>
             </motion.div>
           )}
 
-          {/* Loading state */}
           {activeQuery && loading && (
-            <motion.div
-              key="loading"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-16 gap-3"
-            >
+            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-16 gap-3">
               <SpinnerIcon />
-              <p className="text-sm text-muted-foreground">Searching\u2026</p>
+              <p className="text-sm text-muted-foreground">Thinking…</p>
             </motion.div>
           )}
 
-          {/* Answer state */}
           {activeQuery && !loading && answer && (
-            <motion.div
-              key="answer"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
-            >
+            <motion.div key="answer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setActiveQuery(null); setAnswer(null); }}
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
                   Back
                 </button>
               </div>
@@ -360,106 +344,46 @@ const ExplorePanel = ({ siteId, profileId, onSearch, onClose }: ExplorePanelProp
                 <div className="prose prose-sm prose-invert max-w-none text-foreground/90 leading-relaxed">
                   <ReactMarkdown>{answer}</ReactMarkdown>
                 </div>
-
-                {/* Feedback row — anonymous thumbs-up / thumbs-down. */}
                 <div className="mt-3 pt-3 border-t border-border/20 flex items-center gap-2">
                   {feedbackStatus === "idle" && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => handleRate("up")}
-                        aria-label="Rate response helpful"
-                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1"
-                      >
-                        <ThumbsUpIcon />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRate("down")}
-                        aria-label="Rate response not helpful"
-                        className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
-                      >
-                        <ThumbsDownIcon />
-                      </button>
+                      <button type="button" onClick={() => handleRate("up")} aria-label="Rate response helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 -ml-1"><ThumbsUpIcon /></button>
+                      <button type="button" onClick={() => handleRate("down")} aria-label="Rate response not helpful" className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"><ThumbsDownIcon /></button>
                     </>
                   )}
-
                   {feedbackStatus === "pending-comment" && (
                     <div className="w-full flex flex-col gap-2">
                       <div className="flex items-center gap-2 text-muted-foreground/60">
                         {feedbackRating === "up" ? <ThumbsUpIcon /> : <ThumbsDownIcon />}
                         <span className="text-[11px]">Thanks for the feedback.</span>
                       </div>
-                      <textarea
-                        value={feedbackComment}
-                        onChange={(e) => setFeedbackComment(e.target.value)}
-                        placeholder="Anything we should know? (optional)"
-                        maxLength={2000}
-                        rows={2}
-                        className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
+                      <textarea value={feedbackComment} onChange={(e) => setFeedbackComment(e.target.value)} placeholder="Anything we should know? (optional)" maxLength={2000} rows={2} className="w-full rounded-lg border border-border/30 bg-background/50 p-2 text-xs text-foreground placeholder:text-muted-foreground/50 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
                       <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={handleSubmitComment}
-                          className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors"
-                        >
-                          Send
-                        </button>
+                        <button type="button" onClick={handleSubmitComment} className="text-[11px] px-2.5 py-1 rounded-md bg-primary/90 text-primary-foreground hover:bg-primary transition-colors">Send</button>
                       </div>
                     </div>
                   )}
-
                   {(feedbackStatus === "submitting" || feedbackStatus === "done") && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground/70">
-                      <CheckIcon />
-                      <span className="text-[11px]">Thanks for the feedback.</span>
-                    </div>
+                    <div className="flex items-center gap-1.5 text-muted-foreground/70"><CheckIcon /><span className="text-[11px]">Thanks for the feedback.</span></div>
                   )}
                 </div>
               </div>
               <div className="flex gap-2">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  placeholder="Ask a follow-up\u2026"
-                  className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-                />
-                <button
-                  onClick={() => handleSearch()}
-                  disabled={!query.trim()}
-                  aria-label="Send follow-up"
-                  className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 hover:opacity-90 active:scale-95 transition-all flex-shrink-0"
-                >
-                  <ArrowIcon />
-                </button>
+                <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} placeholder="Ask a follow-up…" className="flex-1 bg-secondary/50 border border-border/40 rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all" />
+                <button onClick={() => handleSearch()} disabled={!query.trim()} aria-label="Send follow-up" className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30 hover:opacity-90 active:scale-95 transition-all flex-shrink-0"><ArrowIcon /></button>
               </div>
             </motion.div>
           )}
 
-          {/* No content state */}
           {activeQuery && !loading && noContent && (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center py-16 gap-3 text-center"
-            >
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <p className="text-sm text-muted-foreground">No results found for that query.</p>
-              <button
-                onClick={() => { setActiveQuery(null); setNoContent(false); }}
-                className="text-xs text-primary hover:underline"
-              >
-                Try another question
-              </button>
+              <button onClick={() => { setActiveQuery(null); setNoContent(false); }} className="text-xs text-primary hover:underline">Try another question</button>
             </motion.div>
           )}
 
         </AnimatePresence>
       </div>
-
     </div>
   );
 };

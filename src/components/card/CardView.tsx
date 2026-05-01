@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence, useMotionValue, PanInfo } from "framer-motion";
+import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
 import type { Profile, CardLayout } from "@/types";
 import ExplorePanel from "./ExplorePanel";
-import { Search, ChevronLeft, Calendar, X } from "lucide-react";
+import HeroSlider, { kbImagesToSlides } from "./HeroSlider";
+import FeatureIcons from "./FeatureIcons";
+import FooterBar from "./FooterBar";
+import { Search, CalendarDays, Download, X } from "lucide-react";
 import { applyTheme } from "@/lib/theme";
+import { apiClient as db, type KbImage } from "@/lib/apiClient";
 
 function setMetaTag(key: string, content: string, isProperty = false) {
   const attr = isProperty ? "property" : "name";
@@ -29,14 +33,24 @@ export interface CardViewProps {
 }
 
 const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
-  const [isExploreOpen, setIsExploreOpen] = useState(false);
-  const [isCtaOpen, setIsCtaOpen] = useState(false);
+  const [answerKey, setAnswerKey] = useState(0);
+  const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [isScanOpen, setIsScanOpen] = useState(false);
+  const [isCtaOpen, setIsCtaOpen] = useState(false);
+
+  const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
+
+  // Load KB images for the hero slider
+  useEffect(() => {
+    if (!profileId) return;
+    void db.kbImages.listPublic(profileId).then(({ data }) => {
+      if (data?.length) setKbImages(data);
+    });
+  }, [profileId]);
 
   useEffect(() => {
     if (!profile || !applyMeta) return;
     applyTheme(profile.theme || "dark", profile.accent_color || "amber");
-
     if (profile.seo_title) {
       document.title = profile.seo_title;
       setMetaTag("og:title", profile.seo_title, true);
@@ -52,9 +66,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
       setMetaTag("twitter:image", profile.og_image_url);
     }
     if (profile.twitter_handle) {
-      const handle = profile.twitter_handle.startsWith("@")
-        ? profile.twitter_handle
-        : `@${profile.twitter_handle}`;
+      const handle = profile.twitter_handle.startsWith("@") ? profile.twitter_handle : `@${profile.twitter_handle}`;
       setMetaTag("twitter:site", handle);
     }
     setMetaTag("og:url", window.location.href, true);
@@ -62,326 +74,242 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
     setMetaTag("twitter:card", "summary_large_image");
   }, [profile, applyMeta]);
 
-  const displayName = profile?.display_name || "Tanya Williams";
-  const tagline = profile?.tagline || "Founder & AI Consultant";
-  const bio = profile?.bio || "No-code AI agent training for social work professionals.\nGrounded in the NASW Code of Ethics.";
-  const avatarUrl = profile?.avatar_url || profilePhoto;
-  const ctaUrl = profile?.cta_url || "#";
-  const ctaLabel = profile?.cta_label || "Get in Touch";
-  const ctaEmbed = profile?.cta_embed || "";
-  const socialLinks = profile?.social_links || [];
-  const cardLayout: CardLayout = profile?.card_layout || "classic";
-  // Brand name — editable via profile.site_name, falls back to a sensible default.
-  const siteName = profile?.site_name || "60 Watts of Clarity";
+  const displayName  = profile?.display_name || "Jason Fernandez";
+  const tagline      = profile?.tagline      || "AI Literacy Consultant";
+  const bio          = profile?.bio          || "I help founders, teams, and professionals cut through the noise and build real AI literacy\u2014so you can think clearly, decide wisely, and lead the future.";
+  const avatarUrl    = profile?.avatar_url   || profilePhoto;
+  const ctaUrl       = profile?.cta_url      || "#";
+  const ctaLabel     = profile?.cta_label    || "Book a Session";
+  const ctaEmbed     = profile?.cta_embed    || "";
+  const socialLinks  = profile?.social_links || [];
+  const siteName     = profile?.site_name    || "60 Watts of Clarity";
+  const heroHeadline    = (profile as any)?.hero_headline    || "Clarity over hype.";
+  const heroSubheadline = (profile as any)?.hero_subheadline || "AI education and strategy that drives real impact.";
+  const testimonialText   = (profile as any)?.testimonial_text   || "\u201cJason has a rare ability to make AI feel clear, practical, and even exciting. Our team felt aligned and inspired.\u201d";
+  const testimonialAuthor = (profile as any)?.testimonial_author || "Sarah M. \u2022 Head of Product";
+  const workUrl      = (profile as any)?.work_url || "#";
+  const saveContactUrl = (profile as any)?.save_contact_url || "#";
 
-  const dragX = useMotionValue(0);
-  const DRAG_THRESHOLD = -80;
-
-  const handleDragEnd = (_event: PointerEvent, info: PanInfo) => {
-    if (info.offset.x < DRAG_THRESHOLD) {
-      setIsExploreOpen(true);
-    } else if (info.offset.x > -DRAG_THRESHOLD) {
-      setIsExploreOpen(false);
-    }
-    dragX.set(0);
-  };
-
-  const openExplore = useCallback(() => { setIsCtaOpen(false); setIsScanOpen(false); setIsExploreOpen(true); }, []);
-  const closeExplore = useCallback(() => setIsExploreOpen(false), []);
-  const openCta = useCallback(() => { setIsExploreOpen(false); setIsScanOpen(false); setIsCtaOpen(true); }, []);
-  const closeCta = useCallback(() => setIsCtaOpen(false), []);
-  const openScan = useCallback(() => { setIsExploreOpen(false); setIsCtaOpen(false); setIsScanOpen(true); }, []);
-  const closeScan = useCallback(() => setIsScanOpen(false), []);
-
-  const isExpanded = isExploreOpen || isCtaOpen || isScanOpen;
+  const heroSlides = kbImagesToSlides(kbImages);
 
   return (
-    <section className="min-h-[100dvh] flex flex-col items-center justify-center px-4 py-8" aria-label="Business card">
-      <motion.div
-        layout
-        transition={{ type: "spring", damping: 32, stiffness: 220 }}
-        role="region"
-        aria-label={`${displayName} — ${tagline}`}
-        className={`relative w-full rounded-3xl border border-border/40 bg-card/40 backdrop-blur-sm overflow-hidden ${
-          isExpanded ? "max-w-5xl" : "max-w-lg"
-        }`}
-      >
-        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-          <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute -bottom-16 -left-16 w-56 h-56 rounded-full bg-amber-500/5 blur-2xl" />
-          <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: `radial-gradient(circle, hsl(38 95% 50% / 0.4) 1px, transparent 1px)`,
-              backgroundSize: '32px 32px',
-            }}
-          />
-          <div className="absolute top-1/3 -left-20 w-[140%] h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent rotate-[-8deg]" />
+    <div className="min-h-[100dvh] flex flex-col bg-background">
+
+      {/* ── Top nav bar ── */}
+      <header className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
+        {/* Logo */}
+        <div className="flex items-center gap-2">
+          {/* Bolt SVG logo */}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
+          </svg>
+          <span className="font-display font-semibold text-sm text-foreground">{siteName}</span>
         </div>
+        {/* AI Concierge badge */}
+        <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          AI Concierge
+        </div>
+      </header>
 
-        {/* On mobile, expanded panels stack vertically. On md+ they sit side-by-side. */}
-        <div className="relative z-10 flex flex-col md:flex-row h-full">
-          <motion.div
-            layout
-            drag={!isExpanded ? "x" : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.15}
-            onDragEnd={handleDragEnd}
-            style={{ x: !isExpanded ? dragX : 0 }}
-            className={`flex flex-col cursor-grab active:cursor-grabbing ${
-              isExpanded
-                ? "md:w-80 w-full flex-shrink-0 md:border-r border-b md:border-b-0 border-border/30 px-6 py-8 items-center justify-center"
-                : `px-6 pt-8 pb-8 w-full ${cardLayout === "classic" ? "items-center" : ""}`
-            }`}
-          >
-            {(cardLayout === "classic" || isExpanded) && (
-              <div className={`flex flex-col items-center w-full`}>
-                <motion.h1
-                  layout="position"
-                  className={`font-display font-semibold text-gradient-amber tracking-tight text-center ${
-                    isExpanded ? "text-lg mb-3" : "text-3xl mb-6"
-                  } transition-[font-size] duration-300`}
-                >
-                  {siteName}
-                </motion.h1>
+      {/* ── Main three-column grid ── */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
 
-                <motion.div
-                  layout="position"
-                  className={`rounded-full overflow-hidden border border-primary/40 ${
-                    isExpanded ? "w-20 h-20 mb-3" : "w-24 h-24 mb-4"
-                  } transition-all duration-300`}
-                >
-                  <img
-                    src={avatarUrl}
-                    alt={`${displayName} - ${tagline}`}
-                    className="w-full h-full object-cover"
-                    width={96}
-                    height={96}
-                    loading="eager"
-                    onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
-                  />
-                </motion.div>
+        {/* ════════════════════════════════════════
+            COLUMN 1 — Profile sidebar
+            ════════════════════════════════════════ */}
+        <aside
+          className="w-full md:w-64 lg:w-72 flex-shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-border/30 bg-card/40 overflow-y-auto"
+          aria-label="Profile"
+        >
+          <div className="flex flex-col items-start px-5 pt-6 pb-4 gap-4">
 
-                <div className="text-center">
-                  <p className={`font-sans font-semibold text-primary ${isExpanded ? "text-lg" : "text-2xl"}`}>
-                    {displayName}
-                  </p>
-                  <p className={`mt-2 font-sans text-amber-200 ${isExpanded ? "text-sm" : "text-base"}`}>{tagline}</p>
-                  <p className={`font-sans text-foreground/80 mt-4 max-w-sm mx-auto leading-relaxed ${isExpanded ? "text-sm" : "text-base"}`}>
-                    {bio.split("\n").map((line, i) => (
-                      <span key={i}>
-                        {line}
-                        {i < bio.split("\n").length - 1 && <br />}
-                      </span>
-                    ))}
-                  </p>
-                </div>
+            {/* Avatar */}
+            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10 flex-shrink-0">
+              <img
+                src={avatarUrl}
+                alt={`${displayName} — ${tagline}`}
+                className="w-full h-full object-cover"
+                width={96}
+                height={96}
+                loading="eager"
+                onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
+              />
+            </div>
 
-                {socialLinks && socialLinks.length > 0 && (
-                  <div className={isExpanded ? "mt-4" : "mt-6"}>
-                    <SocialLinks links={socialLinks} compact={isExpanded} />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {cardLayout === "bold" && !isExpanded && (
-              <div className="flex flex-col w-full">
-                <motion.h1
-                  layout="position"
-                  className="font-display font-semibold text-gradient-amber tracking-tight text-2xl mb-6"
-                >
-                  {siteName}
-                </motion.h1>
-
-                <div className="flex items-start gap-6 mb-6">
-                  <motion.div
-                    layout="position"
-                    className="rounded-2xl overflow-hidden glow-amber border-2 border-primary/30 w-28 h-28 flex-shrink-0 transition-all duration-300"
-                  >
-                    <img
-                      src={avatarUrl}
-                      alt={`${displayName} - ${tagline}`}
-                      className="w-full h-full object-cover"
-                      width={112}
-                      height={112}
-                      loading="eager"
-                      onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
-                    />
-                  </motion.div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-sans font-bold text-primary text-2xl leading-tight">
-                      {displayName}
-                    </p>
-                    <p className="mt-1 font-sans text-amber-200 text-base">{tagline}</p>
-                    <p className="font-sans text-foreground/80 mt-3 leading-relaxed text-sm">
-                      {bio.split("\n").map((line, i) => (
-                        <span key={i}>
-                          {line}
-                          {i < bio.split("\n").length - 1 && <br />}
-                        </span>
-                      ))}
-                    </p>
-                  </div>
-                </div>
-
-                {socialLinks && socialLinks.length > 0 && (
-                  <div className="mt-2">
-                    <SocialLinks links={socialLinks} />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className={`flex gap-3 flex-wrap ${
-              isExpanded ? "mt-4 flex-col w-full" : cardLayout === "bold" ? "mt-6" : "mt-8 justify-center"
-            }`}>
-              <button
-                onClick={openExplore}
-                className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-primary text-primary-foreground font-semibold text-base glow-amber hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-primary/20 min-w-[150px]"
+            {/* Site name */}
+            <div>
+              <p
+                className="font-display font-bold text-gradient-amber leading-tight"
+                style={{ fontSize: "clamp(1.5rem, 3vw, 2rem)" }}
               >
-                <Search className="w-4 h-4" />
-                Explore
-              </button>
+                {siteName}
+              </p>
+            </div>
+
+            {/* Name + tagline */}
+            <div>
+              <p className="font-sans font-bold text-foreground text-lg leading-tight">{displayName}</p>
+              <p className="text-primary text-sm font-medium mt-0.5">{tagline}</p>
+            </div>
+
+            {/* Bio */}
+            <p className="text-foreground/70 text-sm leading-relaxed">{bio}</p>
+
+            {/* Social links */}
+            {socialLinks.length > 0 && (
+              <SocialLinks links={socialLinks} />
+            )}
+
+            {/* CTA buttons */}
+            <div className="flex flex-col gap-2 w-full mt-1">
               {ctaEmbed ? (
                 <button
-                  onClick={openCta}
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  onClick={() => setIsCtaOpen(true)}
+                  className="flex items-center justify-between gap-2 w-full px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20"
                 >
-                  <Calendar className="w-4 h-4" />
-                  {ctaLabel}
+                  <span className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    {ctaLabel}
+                  </span>
+                  <span className="text-primary-foreground/60">→</span>
                 </button>
               ) : (
                 <a
-                  href={ctaUrl || "#"}
+                  href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
+                  className="flex items-center justify-between gap-2 w-full px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20"
                 >
-                  <Calendar className="w-4 h-4" />
-                  {ctaLabel}
+                  <span className="flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    {ctaLabel}
+                  </span>
+                  <span className="text-primary-foreground/60">→</span>
                 </a>
               )}
-              {showScanLink && (
-                <button
-                  onClick={openScan}
-                  className="flex items-center justify-center gap-2 px-8 py-3 rounded-full bg-secondary/90 border border-primary/30 text-primary font-semibold text-base hover:bg-primary/10 hover:scale-105 active:scale-95 transition-all shadow-sm min-w-[150px]"
-                  aria-label="Show QR code to scan"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="3" y="3" width="7" height="7" />
-                    <rect x="14" y="3" width="7" height="7" />
-                    <rect x="3" y="14" width="7" height="7" />
-                    <line x1="14" y1="14" x2="14" y2="21" />
-                    <line x1="14" y1="14" x2="21" y2="14" />
-                    <line x1="18" y1="18" x2="21" y2="18" />
-                    <line x1="18" y1="18" x2="18" y2="21" />
-                  </svg>
-                  Scan
-                </button>
-              )}
+              <a
+                href={saveContactUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-secondary/80 border border-border/40 text-foreground/80 font-semibold text-sm hover:bg-secondary transition-all"
+              >
+                <Download className="w-4 h-4" />
+                Download My One-Pager
+              </a>
             </div>
+          </div>
+        </aside>
 
-            {!isExpanded && (
-              <button
-                type="button"
-                onClick={openExplore}
-                className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-primary-foreground focus:ring-2 focus:ring-primary/50"
-              >
-                Open explore panel
-              </button>
-            )}
+        {/* ════════════════════════════════════════
+            COLUMN 2 — Hero slider + features + testimonial
+            ════════════════════════════════════════ */}
+        <main
+          className="flex-1 flex flex-col gap-0 overflow-y-auto min-w-0 border-b md:border-b-0 md:border-r border-border/30"
+          aria-label="Content"
+        >
+          {/* Hero image slider */}
+          <div className="relative flex-shrink-0" style={{ height: "clamp(220px, 35vw, 340px)" }}>
+            <HeroSlider
+              slides={heroSlides}
+              headline={heroHeadline}
+              subheadline={heroSubheadline}
+            />
+          </div>
 
+          {/* Feature icons */}
+          <div className="px-5 py-4 border-b border-border/20">
+            <FeatureIcons />
+          </div>
+
+          {/* Testimonial */}
+          {testimonialText && (
+            <div className="px-5 py-4">
+              <blockquote className="border-l-2 border-primary/40 pl-4">
+                <p className="text-foreground/80 text-sm italic leading-relaxed">{testimonialText}</p>
+                {testimonialAuthor && (
+                  <footer className="mt-2 text-primary text-xs font-semibold">{testimonialAuthor}</footer>
+                )}
+              </blockquote>
+            </div>
+          )}
+        </main>
+
+        {/* ════════════════════════════════════════
+            COLUMN 3 — AI Concierge / ExplorePanel
+            ════════════════════════════════════════ */}
+        <aside
+          className="w-full md:w-80 lg:w-96 flex-shrink-0 flex flex-col overflow-hidden"
+          aria-label="AI Concierge"
+        >
+          <ExplorePanel
+            siteId={siteId}
+            profileId={profileId}
+            onClose={() => {}}
+            onAnswer={handleAnswer}
+            hideBanner
+            alwaysOpen
+          />
+        </aside>
+
+      </div>
+
+      {/* ── Footer bar ── */}
+      <FooterBar
+        ctaUrl={ctaUrl}
+        ctaLabel={ctaLabel}
+        workUrl={workUrl}
+        saveContactUrl={saveContactUrl}
+      />
+
+      {/* ── Booking embed modal ── */}
+      {isCtaOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-2xl bg-card rounded-2xl border border-border/40 overflow-hidden shadow-2xl"
+          >
+            <button
+              onClick={() => setIsCtaOpen(false)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close booking"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div
+              className="w-full min-h-[60vh] p-4 pt-12 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:min-h-[55vh] [&>iframe]:border-0 [&>iframe]:rounded-xl"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ctaEmbed, { ADD_TAGS: ["iframe"], ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling"] }) }}
+            />
           </motion.div>
-
-          <AnimatePresence mode="popLayout">
-            {isExploreOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="flex-1 min-w-0 relative md:[height:unset] md:[animation:none]"
-                style={{}}
-                role="region"
-                aria-label="Explore panel"
-              >
-                {/* On md+ use width animation, on mobile use height */}
-                <motion.div
-                  className="h-full"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <button
-                    onClick={closeExplore}
-                    className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Close explore"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <ExplorePanel siteId={siteId} profileId={profileId} onClose={closeExplore} />
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence mode="popLayout">
-            {isCtaOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="flex-1 min-w-0 relative flex flex-col"
-                role="region"
-                aria-label="Booking panel"
-              >
-                <button
-                  onClick={closeCta}
-                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close booking"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                <div
-                  className="flex-1 w-full h-full min-h-[60vh] p-4 pt-14 [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:min-h-[55vh] [&>iframe]:border-0 [&>iframe]:rounded-xl"
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(ctaEmbed, { ADD_TAGS: ["iframe"], ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling"] }) }}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence mode="popLayout">
-            {isScanOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", damping: 32, stiffness: 220 }}
-                className="flex-1 min-w-0 relative flex flex-col items-center justify-center p-8"
-                role="region"
-                aria-label="QR code"
-              >
-                <button
-                  onClick={closeScan}
-                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close QR"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <p className="text-sm text-muted-foreground mb-4">Scan to share this card</p>
-                <div className="bg-white p-4 rounded-2xl">
-                  <QRCodeSVG value={typeof window !== "undefined" ? window.location.href : ""} size={220} level="M" />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
-      </motion.div>
-    </section>
+      )}
+
+      {/* ── QR modal ── */}
+      {isScanOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative flex flex-col items-center gap-4 bg-card rounded-2xl border border-border/40 p-8 shadow-2xl"
+          >
+            <button
+              onClick={() => setIsScanOpen(false)}
+              className="absolute top-3 right-3 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Close QR"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <p className="text-sm text-muted-foreground">Scan to share this card</p>
+            <div className="bg-white p-4 rounded-2xl">
+              <QRCodeSVG value={typeof window !== "undefined" ? window.location.href : ""} size={220} level="M" />
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+    </div>
   );
 };
 
