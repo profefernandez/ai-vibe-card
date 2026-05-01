@@ -1,29 +1,34 @@
 import { motion } from "framer-motion";
 import {
-  Instagram, Linkedin, Twitter, Facebook, Mail, Phone,
-  Youtube, Github, Globe, MessageCircle, Camera, Pin,
-  type LucideIcon,
-} from "lucide-react";
+  InstagramLogo, LinkedinLogo, TwitterLogo, FacebookLogo, Envelope, Phone,
+  YoutubeLogo, GithubLogo, Globe, WhatsappLogo, SnapchatLogo, PinterestLogo,
+  TiktokLogo, ThreadsLogo, MediumLogo,
+  type Icon as PhosphorIcon,
+} from "@phosphor-icons/react";
 import type { SocialLink } from "@/types";
 
 export type { SocialLink };
 
-const ICON_MAP: Record<string, LucideIcon> = {
+const ICON_MAP: Record<string, PhosphorIcon> = {
   phone: Phone,
-  email: Mail,
-  linkedin: Linkedin,
-  instagram: Instagram,
-  twitter: Twitter,
-  facebook: Facebook,
-  youtube: Youtube,
-  tiktok: Camera,
-  github: Github,
+  email: Envelope,
+  linkedin: LinkedinLogo,
+  instagram: InstagramLogo,
+  twitter: TwitterLogo,
+  facebook: FacebookLogo,
+  youtube: YoutubeLogo,
+  tiktok: TiktokLogo,
+  github: GithubLogo,
   website: Globe,
-  whatsapp: MessageCircle,
-  snapchat: Camera,
-  threads: MessageCircle,
-  pinterest: Pin,
+  whatsapp: WhatsappLogo,
+  snapchat: SnapchatLogo,
+  threads: ThreadsLogo,
+  pinterest: PinterestLogo,
+  medium: MediumLogo,
 };
+
+// Default skeleton row — shown until the owner adds real social links.
+const SKELETON_PLATFORMS = ["linkedin", "twitter", "youtube", "medium", "email"] as const;
 
 interface SocialLinksProps {
   links?: SocialLink[];
@@ -31,19 +36,46 @@ interface SocialLinksProps {
 }
 
 const SocialLinks = ({ links, compact = false }: SocialLinksProps) => {
-  const socials = links && links.length > 0 ? links : [];
+  const hasLinks = !!(links && links.length > 0);
+  const items = hasLinks
+    ? links!
+    : SKELETON_PLATFORMS.map((platform) => ({ platform, url: "" }));
 
-  if (socials.length === 0) return null;
+  const size = compact ? 34 : 38;
+  const iconSize = compact ? 17 : 19;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.4, duration: 0.5 }}
-      className="flex flex-wrap justify-center gap-3 py-2"
+      className="flex flex-wrap justify-center gap-2 py-1"
     >
-      {socials.map(({ platform, url }, i) => {
+      {items.map(({ platform, url }, i) => {
         const Icon = ICON_MAP[platform] || Globe;
+        const isPlaceholder = !hasLinks;
+        const chipClass =
+          "rounded-lg flex items-center justify-center transition-all duration-200 border shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] " +
+          (isPlaceholder
+            ? "bg-secondary/20 border-primary/15 text-primary/35 cursor-default"
+            : "bg-secondary/30 border-primary/18 text-primary/75 hover:-translate-y-0.5 hover:text-primary hover:bg-secondary/55 hover:border-primary/40 hover:shadow-[0_12px_24px_-16px_rgba(255,191,90,0.65)]");
+
+        if (isPlaceholder) {
+          return (
+            <motion.span
+              key={`skeleton-${platform}-${i}`}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5 + i * 0.06, type: "spring", stiffness: 200 }}
+              className={chipClass}
+              style={{ width: size, height: size }}
+              aria-hidden="true"
+            >
+              <Icon size={iconSize} weight="fill" />
+            </motion.span>
+          );
+        }
+
         return (
           <motion.a
             key={`${platform}-${i}`}
@@ -53,11 +85,11 @@ const SocialLinks = ({ links, compact = false }: SocialLinksProps) => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.5 + i * 0.06, type: "spring", stiffness: 200 }}
-            className={`rounded-full bg-secondary/80 flex items-center justify-center text-amber-200 hover:text-foreground hover:bg-primary/10 transition-all duration-200 border border-primary/30 ${compact ? "w-9 h-9" : "w-11 h-11"
-              }`}
+            className={chipClass}
+            style={{ width: size, height: size }}
             aria-label={platform}
           >
-            <Icon className={compact ? "w-4 h-4" : "w-5 h-5"} />
+            <Icon size={iconSize} weight="fill" />
           </motion.a>
         );
       })}

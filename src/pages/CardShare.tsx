@@ -52,6 +52,7 @@ const CardShare = () => {
                     slug: data.slug || "",
                     ai_query_enabled: !!data.ai_query_enabled,
                     show_qr_scan_link: !!(data as any).show_qr_scan_link,
+                    services: Array.isArray((data as any).services) ? (data as any).services : [],
                 });
                 setProfileId(data.user_id ?? null);
                 setSiteId(data.site_id ?? null);

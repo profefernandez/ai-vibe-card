@@ -1,34 +1,73 @@
-import { BookOpen, Target, Users, BarChart3 } from "lucide-react";
+import { BarChart3, BrainCircuit, Compass, Sparkles, Users } from "lucide-react";
 
-interface Feature {
-  icon: React.ReactNode;
+interface ServiceCard {
   title: string;
   description: string;
 }
 
 interface FeatureIconsProps {
-  features?: Feature[];
+  services?: ServiceCard[];
+  minSlots?: number;
 }
 
-const DEFAULT_FEATURES: Feature[] = [
-  { icon: <BookOpen className="w-5 h-5" />, title: "AI Literacy", description: "Build confidence and capability across your team." },
-  { icon: <Target className="w-5 h-5" />, title: "Strategy", description: "Align AI to real business goals and outcomes." },
-  { icon: <Users className="w-5 h-5" />, title: "Workshops", description: "Hands-on sessions that make AI practical and fun." },
-  { icon: <BarChart3 className="w-5 h-5" />, title: "Measurable Impact", description: "Track progress and drive lasting results." },
-];
+const FEATURE_ICONS = [Sparkles, Compass, Users, BarChart3, BrainCircuit];
 
-const FeatureIcons = ({ features = DEFAULT_FEATURES }: FeatureIconsProps) => (
-  <div className="grid grid-cols-4 gap-3">
-    {features.map((f, i) => (
-      <div key={i} className="flex flex-col items-center text-center gap-2">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-          {f.icon}
-        </div>
-        <p className="text-[11px] font-semibold text-foreground leading-tight">{f.title}</p>
-        <p className="text-[10px] text-muted-foreground leading-snug">{f.description}</p>
-      </div>
-    ))}
-  </div>
-);
+const buildSkeletonSlots = (count: number): ServiceCard[] =>
+  Array.from({ length: count }, (_, index) => ({
+    title: `Service ${index + 1}`,
+    description: "Add a short summary so visitors immediately understand the outcome.",
+  }));
+
+const FeatureIcons = ({
+  services = [],
+  minSlots = 4,
+}: FeatureIconsProps) => {
+  const normalizedServices = services.filter((service) => service.title?.trim() || service.description?.trim());
+  const hasServices = normalizedServices.length > 0;
+  const slots = hasServices
+    ? normalizedServices
+    : buildSkeletonSlots(Math.max(minSlots, 1));
+
+  return (
+    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+      {slots.map((service, i) => {
+        const isSkeleton = !hasServices;
+        const Icon = FEATURE_ICONS[i % FEATURE_ICONS.length];
+
+        return (
+          <article
+            key={`${service.title}-${i}`}
+            className="rounded-[1.1rem] border border-white/12 bg-black/38 backdrop-blur-sm px-3.5 py-3.5 flex flex-col gap-2.5 min-h-[138px] shadow-[0_18px_36px_-24px_rgba(0,0,0,0.85)]"
+          >
+            {isSkeleton ? (
+              <>
+                <div className="inline-flex items-center justify-center self-start w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary/70">
+                  <Icon className="w-4 h-4" strokeWidth={1.8} />
+                </div>
+                <div className="h-3.5 w-2/3 rounded bg-foreground/15 animate-pulse" aria-hidden="true" />
+                <div className="space-y-1.5" aria-hidden="true">
+                  <div className="h-2.5 w-full rounded bg-muted-foreground/15 animate-pulse" />
+                  <div className="h-2.5 w-5/6 rounded bg-muted-foreground/15 animate-pulse" />
+                </div>
+                <span className="sr-only">Service slot placeholder</span>
+              </>
+            ) : (
+              <>
+                <div className="inline-flex items-center justify-center self-start w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary shadow-sm shadow-primary/10">
+                  <Icon className="w-4 h-4" strokeWidth={1.8} />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-[13px] font-semibold text-white leading-tight tracking-tight">{service.title}</p>
+                  <p className="text-[11.5px] text-white/72 leading-snug font-medium">{service.description}</p>
+                </div>
+                <div className="mt-auto h-px bg-gradient-to-r from-primary/25 via-white/5 to-transparent" aria-hidden="true" />
+              </>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+};
 
 export default FeatureIcons;

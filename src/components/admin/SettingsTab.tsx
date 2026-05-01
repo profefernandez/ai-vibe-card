@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { applyTheme } from "@/lib/theme";
+import { applyTheme, CARD_FONT_PRESETS, type CardFontFamily } from "@/lib/theme";
 import { ACCENT_COLORS } from "@/lib/constants";
 
 interface SettingsTabProps {
@@ -94,6 +94,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   // Profile-level settings
   const [theme, setTheme] = useState("dark");
   const [accentColor, setAccentColor] = useState("amber");
+  const [fontFamily, setFontFamily] = useState<CardFontFamily>("hybrid");
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
   const [ogImageUrl, setOgImageUrl] = useState("");
@@ -113,13 +114,14 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   const fetchData = async () => {
     const [sitesRes, profileRes] = await Promise.all([
       db.from("sites").select("id, domain, share_usage_limit").eq("user_id", user.id).order("created_at", { ascending: false }),
-      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt, ai_query_enabled").eq("user_id", user.id).maybeSingle(),
+      db.from("profiles").select("theme, accent_color, font_family, seo_title, seo_description, og_image_url, twitter_handle, robots_txt, ai_query_enabled").eq("user_id", user.id).maybeSingle(),
     ]);
     setSites((sitesRes.data as SiteSettings[]) || []);
     if (profileRes.data) {
       const p = profileRes.data as any;
       setTheme(p.theme || "dark");
       setAccentColor(p.accent_color || "amber");
+      setFontFamily((p.font_family as CardFontFamily) || "hybrid");
       setSeoTitle(p.seo_title || "");
       setSeoDescription(p.seo_description || "");
       setOgImageUrl(p.og_image_url || "");
@@ -147,6 +149,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
       .update({
         theme,
         accent_color: accentColor,
+        font_family: fontFamily,
         seo_title: seoTitle,
         seo_description: seoDescription,
         og_image_url: ogImageUrl,
@@ -193,13 +196,13 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         <p className="text-sm text-muted-foreground">Configure theme, SEO, crawler rules, and sharing limits.</p>
       </div>
 
-      {/* ── Theme & Accent Color ── */}
+      {/* ── Theme, Accent, and Font ── */}
       <Card className="bg-card/50 border-border/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-sans">
-            <Palette className="w-4 h-4 text-primary" aria-hidden="true" /> Theme & Accent Color
+            <Palette className="w-4 h-4 text-primary" aria-hidden="true" /> Theme, Accent & Font
           </CardTitle>
-          <CardDescription>Choose your card's appearance. The accent color is used for buttons, highlights, and glow effects.</CardDescription>
+          <CardDescription>Choose your card's appearance. Theme, accent color, and font preset all apply to the public business card.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* Theme toggle */}
@@ -242,6 +245,30 @@ export default function SettingsTab({ user }: SettingsTabProps) {
                     : "opacity-60 hover:opacity-100"
                     }`}
                 />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label id="font-label">Card Font</Label>
+            <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-labelledby="font-label">
+              {(Object.entries(CARD_FONT_PRESETS) as [CardFontFamily, typeof CARD_FONT_PRESETS[CardFontFamily]][]).map(([value, preset]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={fontFamily === value}
+                  onClick={() => setFontFamily(value)}
+                  className={`rounded-xl border px-4 py-3 text-left transition-all ${fontFamily === value
+                    ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                    : "border-border/30 bg-secondary/20 hover:bg-secondary/40"
+                    }`}
+                >
+                  <p className="text-sm font-semibold text-foreground">{preset.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {value === "inter" ? "One consistent sans-serif font across the card." : value === "playfair" ? "One consistent serif font across the card." : "Inter body text with Playfair display headings."}
+                  </p>
+                </button>
               ))}
             </div>
           </div>

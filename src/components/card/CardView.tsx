@@ -1,16 +1,16 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
-import { QRCodeSVG } from "qrcode.react";
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
 import SocialLinks from "./SocialLinks";
-import type { Profile, CardLayout } from "@/types";
+import type { Profile } from "@/types";
 import ExplorePanel from "./ExplorePanel";
 import HeroSlider, { kbImagesToSlides } from "./HeroSlider";
 import FeatureIcons from "./FeatureIcons";
 import FooterBar from "./FooterBar";
-import { Search, CalendarDays, Download, X } from "lucide-react";
-import { applyTheme } from "@/lib/theme";
+import LayoutTuner, { type LayoutTunerValues } from "./LayoutTuner";
+import { CalendarDays, Download, X } from "lucide-react";
+import { applyTheme, getCardTypographyStyles } from "@/lib/theme";
 import { apiClient as db, type KbImage } from "@/lib/apiClient";
 
 function setMetaTag(key: string, content: string, isProperty = false) {
@@ -32,13 +32,140 @@ export interface CardViewProps {
   applyMeta?: boolean;
 }
 
+const PANEL_CLASS =
+  "rounded-[1.6rem] border border-primary/18 bg-card/55 backdrop-blur-xl shadow-[0_24px_80px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/5 relative overflow-hidden before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0))] before:content-['']";
+
+// Subtle dot-grid texture overlay applied to each card panel via inline style.
+const PANEL_DOT_TEXTURE: React.CSSProperties = {
+  backgroundImage:
+    "radial-gradient(circle, hsl(var(--primary) / 0.06) 1px, transparent 1px)",
+  backgroundSize: "18px 18px",
+};
+
+const LAYOUT_TUNER_STORAGE_KEY = "card-layout-tuner:v1";
+
+const DEFAULT_LAYOUT_TUNER_VALUES: LayoutTunerValues = {
+  leftRatio: 20,
+  rightRatio: 28,
+  gap: 12,
+  gridShiftY: 0,
+  leftOffsetY: 0,
+  middleOffsetY: 0,
+  rightOffsetY: 0,
+  heroMinHeight: 280,
+  heroOffsetY: 0,
+  featureOffsetY: 0,
+  testimonialOffsetY: 0,
+};
+
+type DragTarget = "left" | "right";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatTrack(ratio: number) {
+  return `calc((100% - (2 * var(--card-grid-gap))) * ${ratio / 100})`;
+}
+
 const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
   const [answerKey, setAnswerKey] = useState(0);
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
-  const [isScanOpen, setIsScanOpen] = useState(false);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
+  const [layoutTunerValues, setLayoutTunerValues] = useState<LayoutTunerValues>(DEFAULT_LAYOUT_TUNER_VALUES);
+  const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const isDev = import.meta.env.DEV;
 
   const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
+
+  const middleRatio = useMemo(
+    () => 100 - layoutTunerValues.leftRatio - layoutTunerValues.rightRatio,
+    [layoutTunerValues.leftRatio, layoutTunerValues.rightRatio],
+  );
+
+  const gridTemplateColumns = useMemo(
+    () => [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio].map(formatTrack).join(" "),
+    [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio],
+  );
+
+  const rootStyle = useMemo(
+    () => ({
+      ...getCardTypographyStyles(profile?.font_family),
+      backgroundImage:
+        "radial-gradient(circle at 18% 18%, hsl(var(--primary) / 0.12), transparent 24%), radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.08), transparent 55%), radial-gradient(circle at 85% 80%, hsl(var(--primary) / 0.05), transparent 50%), linear-gradient(180deg, hsl(222 20% 7%) 0%, hsl(222 22% 5%) 100%)",
+      "--card-grid-gap": `${layoutTunerValues.gap}px`,
+      "--desktop-grid-columns": gridTemplateColumns,
+      "--card-grid-shift-y": `${layoutTunerValues.gridShiftY}px`,
+      "--profile-offset-y": `${layoutTunerValues.leftOffsetY}px`,
+      "--content-offset-y": `${layoutTunerValues.middleOffsetY}px`,
+      "--chat-offset-y": `${layoutTunerValues.rightOffsetY}px`,
+      "--hero-min-height": `${layoutTunerValues.heroMinHeight}px`,
+      "--hero-offset-y": `${layoutTunerValues.heroOffsetY}px`,
+      "--feature-offset-y": `${layoutTunerValues.featureOffsetY}px`,
+      "--testimonial-offset-y": `${layoutTunerValues.testimonialOffsetY}px`,
+    }) as React.CSSProperties,
+    [gridTemplateColumns, layoutTunerValues, profile?.font_family],
+  );
+
+  useEffect(() => {
+    if (!isDev || typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(LAYOUT_TUNER_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Partial<LayoutTunerValues>;
+      setLayoutTunerValues((current) => ({ ...current, ...parsed }));
+    } catch {
+      window.localStorage.removeItem(LAYOUT_TUNER_STORAGE_KEY);
+    }
+  }, [isDev]);
+
+  useEffect(() => {
+    if (!isDev || typeof window === "undefined") return;
+    window.localStorage.setItem(LAYOUT_TUNER_STORAGE_KEY, JSON.stringify(layoutTunerValues));
+  }, [isDev, layoutTunerValues]);
+
+  useEffect(() => {
+    if (!dragTarget || !gridRef.current) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const rect = gridRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const usableWidth = rect.width - layoutTunerValues.gap * 2;
+      if (usableWidth <= 0) return;
+
+      const minLeftRatio = (190 / usableWidth) * 100;
+      const minMiddleRatio = (360 / usableWidth) * 100;
+      const minRightRatio = (260 / usableWidth) * 100;
+
+      if (dragTarget === "left") {
+        const nextLeftRatio = clamp(
+          (((event.clientX - rect.left) - layoutTunerValues.gap / 2) / usableWidth) * 100,
+          minLeftRatio,
+          100 - layoutTunerValues.rightRatio - minMiddleRatio,
+        );
+        setLayoutTunerValues((current) => ({ ...current, leftRatio: Number(nextLeftRatio.toFixed(2)) }));
+        return;
+      }
+
+      const nextRightRatio = clamp(
+        (((rect.right - event.clientX) - layoutTunerValues.gap / 2) / usableWidth) * 100,
+        minRightRatio,
+        100 - layoutTunerValues.leftRatio - minMiddleRatio,
+      );
+      setLayoutTunerValues((current) => ({ ...current, rightRatio: Number(nextRightRatio.toFixed(2)) }));
+    };
+
+    const handleUp = () => setDragTarget(null);
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [dragTarget, layoutTunerValues.gap, layoutTunerValues.leftRatio, layoutTunerValues.rightRatio]);
 
   // Load KB images for the hero slider
   useEffect(() => {
@@ -74,127 +201,184 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
     setMetaTag("twitter:card", "summary_large_image");
   }, [profile, applyMeta]);
 
-  const displayName  = profile?.display_name || "Jason Fernandez";
-  const tagline      = profile?.tagline      || "AI Literacy Consultant";
-  const bio          = profile?.bio          || "I help founders, teams, and professionals cut through the noise and build real AI literacy\u2014so you can think clearly, decide wisely, and lead the future.";
-  const avatarUrl    = profile?.avatar_url   || profilePhoto;
-  const ctaUrl       = profile?.cta_url      || "#";
-  const ctaLabel     = profile?.cta_label    || "Book a Session";
-  const ctaEmbed     = profile?.cta_embed    || "";
-  const socialLinks  = profile?.social_links || [];
-  const siteName     = profile?.site_name    || "60 Watts of Clarity";
-  const heroHeadline    = (profile as any)?.hero_headline    || "Clarity over hype.";
+  const displayName = profile?.display_name || "Jason Fernandez";
+  const tagline = profile?.tagline || "AI Literacy Consultant";
+  const bio = profile?.bio || "I help founders, teams, and professionals cut through the noise and build real AI literacy—so you can think clearly, decide wisely, and lead the future.";
+  const avatarUrl = profile?.avatar_url || profilePhoto;
+  const ctaUrl = profile?.cta_url || "#";
+  const ctaLabel = profile?.cta_label || "Book a Session";
+  const ctaEmbed = profile?.cta_embed || "";
+  const socialLinks = profile?.social_links || [];
+  const siteName = profile?.site_name || "60 Watts of Clarity";
+  const heroHeadline = (profile as any)?.hero_headline || "Clarity over hype.";
   const heroSubheadline = (profile as any)?.hero_subheadline || "AI education and strategy that drives real impact.";
-  const testimonialText   = (profile as any)?.testimonial_text   || "\u201cJason has a rare ability to make AI feel clear, practical, and even exciting. Our team felt aligned and inspired.\u201d";
-  const testimonialAuthor = (profile as any)?.testimonial_author || "Sarah M. \u2022 Head of Product";
-  const workUrl      = (profile as any)?.work_url || "#";
+  const testimonialText = (profile as any)?.testimonial_text || "“Jason has a rare ability to make AI feel clear, practical, and even exciting. Our team felt aligned and inspired.”";
+  const testimonialAuthor = (profile as any)?.testimonial_author || "Sarah M. • Head of Product";
+  const workUrl = (profile as any)?.work_url || "#";
   const saveContactUrl = (profile as any)?.save_contact_url || "#";
 
   const heroSlides = kbImagesToSlides(kbImages);
+  const serviceItems = Array.isArray((profile as any)?.services)
+    ? (profile as any).services
+      .map((service: any) => ({
+        title: service?.title || "",
+        description: service?.description || "",
+        ctaLabel: service?.ctaLabel || service?.cta_label || ctaLabel,
+        ctaUrl: service?.ctaUrl || service?.cta_url || ctaUrl,
+      }))
+      .filter((service: { title: string; description: string }) => service.title.trim() || service.description.trim())
+    : [];
 
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-background">
+    <div
+      className="business-card-theme card-font-sans min-h-[100dvh] flex flex-col bg-background relative overflow-hidden"
+      style={rootStyle}
+    >
 
       {/* ── Top nav bar ── */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-border/30 bg-card/60 backdrop-blur-sm flex-shrink-0">
-        {/* Logo */}
+      <header className="flex items-center justify-between px-5 py-3.5 flex-shrink-0">
         <div className="flex items-center gap-2">
-          {/* Bolt SVG logo */}
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
           </svg>
-          <span className="font-display font-semibold text-sm text-foreground">{siteName}</span>
+          <span className="card-font-display font-semibold text-[12px] text-primary tracking-[0.16em] uppercase">{siteName}</span>
         </div>
-        {/* AI Concierge badge */}
-        <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        <div className="flex items-center gap-1.5 text-[11px] text-primary/88 font-medium tracking-[0.12em] uppercase">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/60" />
           AI Concierge
         </div>
       </header>
 
-      {/* ── Main three-column grid ── */}
-      <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+      {/* ── Header / cards separator — warm strip ── */}
+      <div
+        className="mx-3 h-[2px] bg-gradient-to-r from-transparent via-primary to-transparent flex-shrink-0"
+        style={{ boxShadow: "0 0 12px hsl(var(--primary) / 0.35)" }}
+        aria-hidden="true"
+      />
+
+      {/* ── Three-column bento grid ── */}
+      {/* md (768px): 2-col profile+content; xl (1280px+): add AI panel column */}
+      <div
+        ref={gridRef}
+        className="relative flex-1 grid grid-cols-1 md:grid-cols-[260px_1fr] xl:[grid-template-columns:var(--desktop-grid-columns)] px-3 pb-3 pt-3 min-h-0"
+        style={{
+          gap: "var(--card-grid-gap)",
+          transform: "translateY(var(--card-grid-shift-y))",
+        }}
+      >
+
+        {isDev && (
+          <>
+            <button
+              type="button"
+              aria-label="Resize between profile and middle panels"
+              onMouseDown={() => setDragTarget("left")}
+              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
+              style={{
+                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + (var(--card-grid-gap) / 2))`,
+              }}
+            >
+              <span className="h-10 w-1 rounded-full bg-primary/70" />
+            </button>
+            <button
+              type="button"
+              aria-label="Resize between middle and chat panels"
+              onMouseDown={() => setDragTarget("right")}
+              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
+              style={{
+                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + ${formatTrack(middleRatio)} + (var(--card-grid-gap) * 1.5))`,
+              }}
+            >
+              <span className="h-10 w-1 rounded-full bg-primary/70" />
+            </button>
+          </>
+        )}
 
         {/* ════════════════════════════════════════
-            COLUMN 1 — Profile sidebar
+            COLUMN 1 — Profile card
             ════════════════════════════════════════ */}
         <aside
-          className="w-full md:w-64 lg:w-72 flex-shrink-0 flex flex-col border-b md:border-b-0 md:border-r border-border/30 bg-card/40 overflow-y-auto"
+          className={`${PANEL_CLASS} flex flex-col overflow-y-auto`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--profile-offset-y))",
+          }}
           aria-label="Profile"
         >
-          <div className="flex flex-col items-start px-5 pt-6 pb-4 gap-4">
+          <div className="flex flex-col items-center text-center px-5 md:px-6 pt-6 pb-6 gap-4.5">
 
             {/* Avatar */}
-            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10 flex-shrink-0">
+            <div className="w-28 h-28 md:w-32 md:h-32 rounded-[1.35rem] overflow-hidden border-2 border-primary/30 shadow-[0_18px_40px_-22px_rgba(255,191,90,0.7)] flex-shrink-0">
               <img
                 src={avatarUrl}
                 alt={`${displayName} — ${tagline}`}
                 className="w-full h-full object-cover"
-                width={96}
-                height={96}
+                width={128}
+                height={128}
                 loading="eager"
                 onError={(e) => { (e.target as HTMLImageElement).src = profilePhoto; }}
               />
             </div>
 
-            {/* Site name */}
-            <div>
-              <p
-                className="font-display font-bold text-gradient-amber leading-tight"
-                style={{ fontSize: "clamp(1.5rem, 3vw, 2rem)" }}
-              >
-                {siteName}
-              </p>
-            </div>
+            {/* Site name — warm burnished copper, large, centered */}
+            <p
+              className="card-font-display font-bold leading-[1.02] bg-clip-text text-transparent drop-shadow-[0_2px_16px_rgba(255,191,90,0.18)]"
+              style={{
+                fontSize: "clamp(1.65rem, 2.2vw, 2.1rem)",
+                backgroundImage: "linear-gradient(180deg, hsl(var(--primary) / 0.98), hsl(var(--accent) / 0.72))",
+              }}
+            >
+              {siteName}
+            </p>
 
             {/* Name + tagline */}
-            <div>
-              <p className="font-sans font-bold text-foreground text-lg leading-tight">{displayName}</p>
-              <p className="text-primary text-sm font-medium mt-0.5">{tagline}</p>
+            <div className="space-y-1">
+              <p className="font-semibold text-foreground text-[1.45rem] leading-tight tracking-tight">{displayName}</p>
+              <p className="text-primary text-[15px] font-semibold tracking-[0.02em]">{tagline}</p>
             </div>
 
             {/* Bio */}
-            <p className="text-foreground/70 text-sm leading-relaxed">{bio}</p>
+            <p className="text-muted-foreground text-[13.5px] leading-relaxed font-medium max-w-[24ch]">{bio}</p>
 
             {/* Social links */}
             {socialLinks.length > 0 && (
-              <SocialLinks links={socialLinks} />
+              <SocialLinks links={socialLinks} compact />
             )}
 
             {/* CTA buttons */}
-            <div className="flex flex-col gap-2 w-full mt-1">
+            <div className="flex flex-col gap-2.5 w-full mt-1">
               {ctaEmbed ? (
                 <button
                   onClick={() => setIsCtaOpen(true)}
-                  className="flex items-center justify-between gap-2 w-full px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
                 >
-                  <span className="flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
+                  <span className="flex items-center gap-2.5">
+                    <CalendarDays className="w-[18px] h-[18px]" />
                     {ctaLabel}
                   </span>
-                  <span className="text-primary-foreground/60">→</span>
+                  <span className="text-primary-foreground/90 text-base">→</span>
                 </button>
               ) : (
                 <a
                   href={ctaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-2 w-full px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-md shadow-primary/20"
+                  className="flex items-center justify-between gap-2 w-full px-5 py-3 rounded-2xl bg-primary text-primary-foreground font-semibold text-[15px] hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/30"
                 >
-                  <span className="flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
+                  <span className="flex items-center gap-2.5">
+                    <CalendarDays className="w-[18px] h-[18px]" />
                     {ctaLabel}
                   </span>
-                  <span className="text-primary-foreground/60">→</span>
+                  <span className="text-primary-foreground/90 text-base">→</span>
                 </a>
               )}
               <a
                 href={saveContactUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-secondary/80 border border-border/40 text-foreground/80 font-semibold text-sm hover:bg-secondary transition-all"
+                className="flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-secondary/30 border border-primary/25 text-primary font-semibold text-[15px] hover:bg-secondary/50 hover:border-primary/45 transition-all"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-[18px] h-[18px]" />
                 Download My One-Pager
               </a>
             </div>
@@ -202,50 +386,78 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         </aside>
 
         {/* ════════════════════════════════════════
-            COLUMN 2 — Hero slider + features + testimonial
+            COLUMN 2 — Hero + features + testimonial
             ════════════════════════════════════════ */}
         <main
-          className="flex-1 flex flex-col gap-0 overflow-y-auto min-w-0 border-b md:border-b-0 md:border-r border-border/30"
+          className={`${PANEL_CLASS} flex min-w-0 overflow-hidden relative`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--content-offset-y))",
+          }}
           aria-label="Content"
         >
-          {/* Hero image slider */}
-          <div className="relative flex-shrink-0" style={{ height: "clamp(220px, 35vw, 340px)" }}>
+          <div
+            className="absolute inset-0"
+            style={{
+              transform: "translateY(var(--hero-offset-y))",
+            }}
+          >
             <HeroSlider
               slides={heroSlides}
               headline={heroHeadline}
               subheadline={heroSubheadline}
+              controlsBottomClassName="bottom-[17rem] md:bottom-[18rem]"
+              overlayClassName="justify-start px-6 md:px-7 pt-7 md:pt-8"
             />
           </div>
 
-          {/* Feature icons */}
-          <div className="px-5 py-4 border-b border-border/20">
-            <FeatureIcons />
-          </div>
-
-          {/* Testimonial */}
-          {testimonialText && (
-            <div className="px-5 py-4">
-              <blockquote className="border-l-2 border-primary/40 pl-4">
-                <p className="text-foreground/80 text-sm italic leading-relaxed">{testimonialText}</p>
-                {testimonialAuthor && (
-                  <footer className="mt-2 text-primary text-xs font-semibold">{testimonialAuthor}</footer>
-                )}
-              </blockquote>
+          <div className="relative z-10 mt-auto flex w-full flex-col bg-gradient-to-t from-black/88 via-black/52 to-transparent pt-36 md:pt-40">
+            <div
+              className="px-4 md:px-5 pb-3 flex-shrink-0"
+              style={{ transform: "translateY(var(--feature-offset-y))" }}
+            >
+              <FeatureIcons
+                services={serviceItems}
+                minSlots={Math.max(4, serviceItems.length || 0)}
+              />
             </div>
-          )}
+
+            {testimonialText && (
+              <div className="mx-3 mb-3 flex-shrink-0" style={{ transform: "translateY(var(--testimonial-offset-y))" }}>
+                <div className="rounded-xl border border-white/12 bg-black/42 backdrop-blur-sm px-5 py-4 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.85)]">
+                  <blockquote className="flex items-start gap-3">
+                    <span className="card-font-display text-primary text-3xl leading-none flex-shrink-0 -mt-1">&ldquo;</span>
+                    <div className="min-w-0">
+                      <p className="text-foreground/92 text-[15px] leading-relaxed font-medium">{testimonialText.replace(/^[“"]|[”"]$/g, "")}</p>
+                      {testimonialAuthor && (
+                        <footer className="mt-2 text-primary text-[13px] font-semibold tracking-wide">{testimonialAuthor}</footer>
+                      )}
+                    </div>
+                  </blockquote>
+                </div>
+              </div>
+            )}
+          </div>
         </main>
 
         {/* ════════════════════════════════════════
-            COLUMN 3 — AI Concierge / ExplorePanel
+            COLUMN 3 — AI Concierge panel
+            At md: spans both columns below profile+content
+            At xl: becomes the 3rd column
             ════════════════════════════════════════ */}
         <aside
-          className="w-full md:w-80 lg:w-96 flex-shrink-0 flex flex-col overflow-hidden"
+          className={`${PANEL_CLASS} flex flex-col overflow-hidden min-w-0 md:col-span-2 xl:col-span-1 min-h-[420px] xl:min-h-0`}
+          style={{
+            ...PANEL_DOT_TEXTURE,
+            transform: "translateY(var(--chat-offset-y))",
+          }}
           aria-label="AI Concierge"
         >
           <ExplorePanel
             siteId={siteId}
             profileId={profileId}
-            onClose={() => {}}
+            assistantAvatarUrl={avatarUrl}
+            onClose={() => { }}
             onAnswer={handleAnswer}
             hideBanner
             alwaysOpen
@@ -254,13 +466,15 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
 
       </div>
 
-      {/* ── Footer bar ── */}
-      <FooterBar
-        ctaUrl={ctaUrl}
-        ctaLabel={ctaLabel}
-        workUrl={workUrl}
-        saveContactUrl={saveContactUrl}
-      />
+      {/* ── Footer card ── */}
+      <div className="px-3 pb-3">
+        <FooterBar
+          ctaUrl={ctaUrl}
+          ctaLabel={ctaLabel}
+          workUrl={workUrl}
+          saveContactUrl={saveContactUrl}
+        />
+      </div>
 
       {/* ── Booking embed modal ── */}
       {isCtaOpen && (
@@ -286,27 +500,12 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
         </div>
       )}
 
-      {/* ── QR modal ── */}
-      {isScanOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative flex flex-col items-center gap-4 bg-card rounded-2xl border border-border/40 p-8 shadow-2xl"
-          >
-            <button
-              onClick={() => setIsScanOpen(false)}
-              className="absolute top-3 right-3 p-2 rounded-full bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Close QR"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <p className="text-sm text-muted-foreground">Scan to share this card</p>
-            <div className="bg-white p-4 rounded-2xl">
-              <QRCodeSVG value={typeof window !== "undefined" ? window.location.href : ""} size={220} level="M" />
-            </div>
-          </motion.div>
-        </div>
+      {isDev && (
+        <LayoutTuner
+          values={layoutTunerValues}
+          onChange={setLayoutTunerValues}
+          onReset={() => setLayoutTunerValues(DEFAULT_LAYOUT_TUNER_VALUES)}
+        />
       )}
 
     </div>
