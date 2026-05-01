@@ -27,6 +27,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
     cta_embed: "",
     social_links: [],
     card_layout: "classic",
+    site_name: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -56,6 +57,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
         cta_embed: data.cta_embed || "",
         social_links: Array.isArray(data.social_links) ? data.social_links : [],
         card_layout: data.card_layout === "bold" ? "bold" : "classic",
+        site_name: data.site_name || "",
       });
     }
     setLoading(false);
@@ -250,6 +252,22 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           <CardDescription>This info appears on your shared card.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+
+          {/* Brand / Site Name — full width row above the grid */}
+          <div className="space-y-2">
+            <Label htmlFor="site_name">Brand / Site Name</Label>
+            <Input
+              id="site_name"
+              value={profile.site_name ?? ""}
+              onChange={(e) => setProfile({ ...profile, site_name: e.target.value })}
+              placeholder="e.g. 60 Watts of Clarity"
+              maxLength={100}
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown as the heading above your card. Leave blank to hide it.
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="display_name">Display Name</Label>
@@ -342,9 +360,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                     <ImageIcon className="w-8 h-8 text-muted-foreground" />
                   )}
                   <span className="text-sm text-muted-foreground text-center">
-                    {uploading ? "Uploading…" : "Click or drag & drop to upload"}
+                    {uploading ? "Uploading\u2026" : "Click or drag & drop to upload"}
                   </span>
-                  <span className="text-xs text-muted-foreground/60">JPEG, PNG, WebP, GIF — max 5 MB</span>
+                  <span className="text-xs text-muted-foreground/60">JPEG, PNG, WebP, GIF \u2014 max 5 MB</span>
                 </div>
               )}
             </div>
@@ -404,7 +422,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                   className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none"
                   aria-label={`Move ${link.platform} link up`}
                 >
-                  ▲
+                  \u25b2
                 </button>
                 <button
                   type="button"
@@ -413,7 +431,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
                   className="text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs leading-none"
                   aria-label={`Move ${link.platform} link down`}
                 >
-                  ▼
+                  \u25bc
                 </button>
               </div>
               <select

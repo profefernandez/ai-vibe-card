@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor, Zap } from "lucide-react";
+import { Loader2, Save, Shield, Palette, Globe, Bot, Sun, Moon, Monitor, Zap, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { applyTheme } from "@/lib/theme";
 import { ACCENT_COLORS } from "@/lib/constants";
@@ -16,7 +16,7 @@ interface SettingsTabProps {
   user: User;
 }
 
-/** Convert simple toggles → robots.txt directive array for storage. */
+/** Convert simple toggles \u2192 robots.txt directive array for storage. */
 function togglesToDirectives(t: CrawlerToggles): RobotDirective[] {
   const directives: RobotDirective[] = [];
 
@@ -26,7 +26,7 @@ function togglesToDirectives(t: CrawlerToggles): RobotDirective[] {
     rules: [{ action: t.searchEngines ? "allow" : "disallow", path: "/" }],
   });
 
-  // Social media preview bots — only add explicit rules if different from the wildcard
+  // Social media preview bots \u2014 only add explicit rules if different from the wildcard
   if (t.socialPreviews && !t.searchEngines) {
     directives.push(
       { userAgent: "Twitterbot", rules: [{ action: "allow", path: "/" }] },
@@ -53,7 +53,7 @@ function togglesToDirectives(t: CrawlerToggles): RobotDirective[] {
   return directives;
 }
 
-/** Convert stored directives back → simple toggles. */
+/** Convert stored directives back \u2192 simple toggles. */
 function directivesToToggles(directives: RobotDirective[]): CrawlerToggles {
   const find = (ua: string) => directives.find((d) => d.userAgent === ua);
   const isAllowed = (d?: RobotDirective) => !d || d.rules.every((r) => r.action === "allow");
@@ -105,6 +105,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [aiQueryEnabled, setAiQueryEnabled] = useState(false);
+  const [showQrScanLink, setShowQrScanLink] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -113,7 +114,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
   const fetchData = async () => {
     const [sitesRes, profileRes] = await Promise.all([
       db.from("sites").select("id, domain, share_usage_limit").eq("user_id", user.id).order("created_at", { ascending: false }),
-      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt, ai_query_enabled").eq("user_id", user.id).maybeSingle(),
+      db.from("profiles").select("theme, accent_color, seo_title, seo_description, og_image_url, twitter_handle, robots_txt, ai_query_enabled, show_qr_scan_link").eq("user_id", user.id).maybeSingle(),
     ]);
     setSites((sitesRes.data as SiteSettings[]) || []);
     if (profileRes.data) {
@@ -128,6 +129,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         setCrawlerToggles(directivesToToggles(p.robots_txt));
       }
       setAiQueryEnabled(!!p.ai_query_enabled);
+      setShowQrScanLink(!!p.show_qr_scan_link);
     }
     setLoading(false);
   };
@@ -153,6 +155,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         twitter_handle: twitterHandle,
         robots_txt: togglesToDirectives(crawlerToggles) as any,
         ai_query_enabled: aiQueryEnabled,
+        show_qr_scan_link: showQrScanLink,
       })
       .eq("user_id", user.id);
 
@@ -259,7 +262,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="seo-title">Page Title</Label>
-            <Input id="seo-title" value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} placeholder="Your Name — AI Business Card" />
+            <Input id="seo-title" value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} placeholder="Your Name \u2014 AI Business Card" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="seo-description">Meta Description</Label>
@@ -269,7 +272,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
           <div className="space-y-2">
             <Label htmlFor="og-image">OG Image URL</Label>
             <Input id="og-image" value={ogImageUrl} onChange={(e) => setOgImageUrl(e.target.value)} placeholder="https://yoursite.com/og-card.png" />
-            <p className="text-xs text-muted-foreground">Recommended 1200×630px. Used in Twitter/Facebook/LinkedIn link previews.</p>
+            <p className="text-xs text-muted-foreground">Recommended 1200\u00d7630px. Used in Twitter/Facebook/LinkedIn link previews.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="twitter-handle">Twitter / X Handle</Label>
@@ -279,7 +282,7 @@ export default function SettingsTab({ user }: SettingsTabProps) {
               onChange={(e) => setTwitterHandle(e.target.value)}
               placeholder="@yourhandle"
             />
-            <p className="text-xs text-muted-foreground">Used for the Twitter Card "via" attribution when your link is shared.</p>
+            <p className="text-xs text-muted-foreground">Used for the Twitter Card \u201cvia\u201d attribution when your link is shared.</p>
           </div>
           {ogImageUrl && (
             <div className="rounded-lg overflow-hidden border border-border/30 max-w-xs">
@@ -361,15 +364,16 @@ export default function SettingsTab({ user }: SettingsTabProps) {
         </CardContent>
       </Card>
 
-      {/* ── Cross-Card AI Queries ── */}
+      {/* ── Sharing & Visibility ── */}
       <Card className="bg-card/50 border-border/30">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base font-sans">
-            <Zap className="w-4 h-4 text-primary" aria-hidden="true" /> Cross-Card AI Queries
+            <Zap className="w-4 h-4 text-primary" aria-hidden="true" /> Sharing & Visibility
           </CardTitle>
-          <CardDescription>Allow your approved connections to ask AI questions about your card content.</CardDescription>
+          <CardDescription>Control cross-card AI queries and how visitors can share your card.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Cross-card AI queries */}
           <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
             <div className="space-y-1">
               <Label htmlFor="toggle-ai-query" className="text-sm font-medium text-foreground">
@@ -377,13 +381,31 @@ export default function SettingsTab({ user }: SettingsTabProps) {
               </Label>
               <p className="text-xs text-muted-foreground">
                 When enabled, people you're connected with can ask AI-powered questions about your public site content.
-                Your data is never shared directly — only AI-generated answers are returned.
+                Your data is never shared directly \u2014 only AI-generated answers are returned.
               </p>
             </div>
             <Switch
               id="toggle-ai-query"
               checked={aiQueryEnabled}
               onCheckedChange={setAiQueryEnabled}
+            />
+          </div>
+
+          {/* QR scan link */}
+          <div className="flex items-start justify-between gap-4 p-3 rounded-lg bg-secondary/20">
+            <div className="space-y-1">
+              <Label htmlFor="toggle-qr-scan" className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <QrCode className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                Show \u201cScan QR Code\u201d link on card
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Displays a small QR code link at the bottom of your card so visitors can scan it with their phone.
+              </p>
+            </div>
+            <Switch
+              id="toggle-qr-scan"
+              checked={showQrScanLink}
+              onCheckedChange={setShowQrScanLink}
             />
           </div>
         </CardContent>
