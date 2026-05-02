@@ -1,5 +1,5 @@
 {
-    "name": "60-watts-of-clarity-api",
+    "name": "clarity-60-watts-api",
     "version": "1.0.0",
     "type": "module",
     "description": "Express API backend for 60 Watts of Clarity",
