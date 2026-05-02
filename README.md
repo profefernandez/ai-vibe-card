@@ -14,8 +14,8 @@ An AI-powered clarity concierge, digital business card, and personal website.
 
 ```sh
 # Clone the repo
-git clone <YOUR_GIT_URL>
-cd 60-watts-of-clarity
+git clone <YOUR_GIT_URL> clarity-60-watts
+cd clarity-60-watts
 
 # Install frontend dependencies
 npm install
