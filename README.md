@@ -1,6 +1,6 @@
-# 60 Watts of Clarity — AI Vibe Card
+# 60 Watts of Clarity
 
-An AI-powered digital business card and personal website.
+An AI-powered clarity concierge, digital business card, and personal website.
 
 ## Tech Stack
 
@@ -15,7 +15,7 @@ An AI-powered digital business card and personal website.
 ```sh
 # Clone the repo
 git clone <YOUR_GIT_URL>
-cd ai-vibe-card
+cd 60-watts-of-clarity
 
 # Install frontend dependencies
 npm install

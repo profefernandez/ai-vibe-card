@@ -115,7 +115,7 @@ export default function AdminSidebar({ activeSection, onSectionChange, onBack }:
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
             <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor" className="text-primary" />
           </svg>
-          <span className="text-sm font-bold text-foreground tracking-tight">AI Vibe Card</span>
+          <span className="text-sm font-bold text-foreground tracking-tight">60 Watts of Clarity</span>
         </div>
       )}
 

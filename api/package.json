@@ -1,8 +1,8 @@
 {
-    "name": "ai-vibe-card-api",
+    "name": "60-watts-of-clarity-api",
     "version": "1.0.0",
     "type": "module",
-    "description": "Express API backend for AI Vibe Card — runs on Scala Hosting VPS",
+    "description": "Express API backend for 60 Watts of Clarity",
     "main": "dist/index.js",
     "scripts": {
         "dev": "tsx watch index.ts",

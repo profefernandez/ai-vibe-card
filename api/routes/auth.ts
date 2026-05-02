@@ -307,7 +307,7 @@ router.post("/forgot-password", async (req, res) => {
 
             await sendEmail({
                 to: email.trim(),
-                subject: "Reset your password — AI Vibe Card",
+                subject: "Reset your password — 60 Watts of Clarity",
                 text: `Click the link below to reset your password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you did not request a password reset, ignore this email.`,
                 html: `<p>Click the link below to reset your password. This link expires in 1 hour.</p><p><a href="${resetUrl}">Reset my password</a></p><p>If you did not request a password reset, ignore this email.</p>`,
             });
