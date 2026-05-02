@@ -181,7 +181,7 @@ const CardShare = () => {
                 </div>
 
                 <p className="text-center text-xs text-muted-foreground/50 mt-4">
-                    Powered by <Link to="/" className="hover:text-primary transition-colors">AI Vibe Card</Link>
+                    Powered by <Link to="/" className="hover:text-primary transition-colors">60 Watts of Clarity</Link>
                 </p>
             </div>
         </div>

@@ -1,8 +1,8 @@
-# AI Vibe Card — Codebase Overview
+# 60 Watts of Clarity — Codebase Overview
 
 ## What It Is
 
-An AI-powered digital business card / personal website. The owner can import their existing site content, train an AI on it, and share an interactive card where visitors can chat, book meetings, and explore the owner's services. It includes a full admin dashboard for managing all of this.
+An AI-powered clarity concierge, digital business card / personal website. The owner can import their existing site content, train an AI on it, and share an interactive card where visitors can chat, book meetings, and explore the owner's services. It includes a full admin dashboard for managing all of this.
 
 ---
 

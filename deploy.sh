@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# AI Vibe Card — SPanel Deploy Script
+# 60 Watts of Clarity — SPanel Deploy Script
 #
 # Builds the React frontend and Express API, then packages everything into
 # a deploy-ready tarball you can upload to your Scala Hosting VPS.
@@ -85,7 +85,7 @@ fi
 # ── Step 5: Create .env template if API .env doesn't exist ────────────────────
 if [[ ! -f "$BUILD_DIR/api/.env" ]]; then
     cat > "$BUILD_DIR/api/.env.example" <<'ENVTEMPLATE'
-# AI Vibe Card — API Environment Variables
+# 60 Watts of Clarity — API Environment Variables
 # Copy this to .env and fill in your values. NEVER commit .env to git.
 
 DATABASE_URL=postgresql://aivibe_user:CHANGE_ME@127.0.0.1:5432/aivibe_db

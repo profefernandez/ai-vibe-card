@@ -1,5 +1,5 @@
 # =============================================================================
-# AI Vibe Card — Apache .htaccess for SPanel VPS
+# 60 Watts of Clarity — Apache .htaccess for SPanel VPS
 #
 # This file sits in public_html/ (your domain's document root).
 # Apache serves the React SPA directly for static assets.
