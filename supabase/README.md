@@ -56,3 +56,47 @@ A Vitest suite (added in a later phase) creates two synthetic Supabase users
 and asserts that user A cannot read or modify user B's rows. This is the
 only authorization fence once the Express API is gone, so the test is
 non-negotiable.
+
+## Edge Functions
+
+Server-side logic that needs secrets (Firecrawl, Lemonade, AI gateway, the
+AES-256-GCM `ENCRYPTION_KEY`) lives in `supabase/functions/<name>/index.ts`.
+The functions run on Deno; shared helpers live in
+`supabase/functions/_shared/` (`cors.ts`, `auth.ts`, `crypto.ts`,
+`audit.ts`).
+
+The front-end shim `src/lib/api/functions.ts` carries an allowlist
+(`SUPABASE_EDGE_FUNCTIONS`) of the names that have been ported. Anything in
+the allowlist goes through `supabase.functions.invoke()`; everything else
+still hits the legacy `/api/functions/<name>` endpoint until ported. This
+lets us migrate one function at a time.
+
+### Deploy
+```bash
+# One-time: link the local checkout to the Supabase project
+supabase link --project-ref <ref>
+
+# Set the secrets the function needs
+supabase secrets set ENCRYPTION_KEY=<64-hex>          # AES-256-GCM key
+# (later phases will add: LEMONADE_API_KEY, LEMONADE_AGENT_ID,
+#                        LEMONADE_SECURITY_ID, FIRECRAWL_API_KEY, ...)
+
+# Deploy a single function
+supabase functions deploy test-api-connection
+
+# Or all functions
+supabase functions deploy
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
+auto-populated by the Edge runtime — don't set them manually.
+
+### Ported so far
+- `test-api-connection` — validates a stored AI provider key. Replaces
+  `api/routes/test-api-connection.ts`.
+
+### Still on the legacy server
+- `lemonade-chat`, `scrape-site`, `verify-domain`, `query-content`,
+  `refresh-sites`, `prune-logs`, `card`, `feedback`. These will be ported
+  in subsequent phases; the front-end shim continues to route them to the
+  Express server in the meantime.
