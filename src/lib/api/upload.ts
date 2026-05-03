@@ -1,9 +1,10 @@
 /**
  * Upload helpers — Supabase Storage edition.
  *
- * Bucket conventions match `0002_rls_policies.sql`:
+ * Bucket conventions (created in the dashboard, policies in
+ * `supabase/migrations/0002_rls_policies.sql` and `0004_knowledge_base.sql`):
  *   - `avatars`   → public-read; per-user folder `{auth.uid()}/...`
- *   - `kb-images` → private; per-user folder `{auth.uid()}/...`
+ *   - `kb-images` → public-read; per-user folder `{auth.uid()}/...`
  *
  * Avatar files are stored at a deterministic path
  *   `avatars/{user_id}/avatar.{ext}`
@@ -12,20 +13,17 @@
  * cache-buster appended by the *caller* (existing convention in
  * `ProfileTab.tsx`); we don't bake one into the URL itself.
  *
- * NOTE: `kbImage` is intentionally NOT yet ported to Supabase Storage. The
- * `kb_images` table doesn't exist in the Supabase migrations yet (added in a
- * later phase together with the kb folder/items schema), and it would be a
- * dead-end to upload to a bucket without somewhere to record the row. Until
- * then, `kbImage` keeps talking to the legacy Express endpoint via
- * `apiFetch`, which now sends the live Supabase access token as its
- * `Authorization` header (see `src/lib/api/client.ts`).
+ * `kbImage` uploads to the `kb-images` bucket and inserts a row in
+ * `public.kb_images`. The two-step write is rolled back (storage object
+ * removed) if the row insert fails.
  */
 
 import { getSupabase } from "@/lib/supabase";
-import { API_BASE, loadSession, saveSession, notifyListeners } from "./client";
 import type { KbImage } from "./kbImages";
+import { nextDisplayOrder } from "./kb";
 
 const AVATAR_BUCKET = "avatars";
+const KB_IMAGES_BUCKET = "kb-images";
 const ALLOWED_AVATAR_TYPES = new Set([
     "image/png",
     "image/jpeg",
@@ -142,34 +140,63 @@ export const upload = {
     /**
      * Upload a knowledge-base / chat-banner image.
      *
-     * Still routes through the legacy Express endpoint until the `kb_images`
-     * table is added to the Supabase schema (later phase). The fetch helper
-     * now attaches the Supabase access token, so the legacy server-side
-     * authentication keeps working.
+     * Two-step Supabase write:
+     *   1. Upload the binary to the public `kb-images` bucket at
+     *      `{auth.uid()}/{ts}-{filename}` (matches the path convention in
+     *      `0004_knowledge_base.sql`'s storage policies).
+     *   2. Insert a `kb_images` row pointing at the resulting public URL.
+     *      `display_order` is auto-assigned (max + 1 within the same user).
+     *
+     * If step 2 fails we best-effort delete the storage object so we don't
+     * leave orphans. Step 1 failures are surfaced as-is.
      */
     async kbImage(file: File, caption = ""): Promise<{ data: KbImage | null; error: Error | null }> {
         try {
-            const session = loadSession();
-            const formData = new FormData();
-            formData.append("image", file);
-            if (caption) formData.append("caption", caption);
-
-            const headers: Record<string, string> = {};
-            if (session?.token) headers["Authorization"] = `Bearer ${session.token}`;
-
-            const res = await fetch(`${API_BASE}/upload/kb-image`, {
-                method: "POST",
-                headers,
-                body: formData,
-            });
-            if (res.status === 401) {
-                saveSession(null);
-                notifyListeners("SIGNED_OUT", null);
-                throw new Error("Unauthorized");
+            if (!file.type.startsWith("image/")) {
+                throw new Error("Only image files are supported.");
             }
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-            return { data: json, error: null };
+            if (file.size > MAX_AVATAR_BYTES) {
+                throw new Error("Image must be under 5 MB.");
+            }
+            const userId = await getCurrentUserId();
+            if (!userId) throw new Error("You must be signed in to upload an image.");
+
+            const sb = getSupabase();
+            const safeName = file.name.replace(/[\\/]+/g, "_").slice(0, 200) || "image";
+            const path = `${userId}/${Date.now()}-${safeName}`;
+
+            const { error: uploadError } = await sb.storage
+                .from(KB_IMAGES_BUCKET)
+                .upload(path, file, {
+                    upsert: false,
+                    contentType: file.type,
+                    cacheControl: "3600",
+                });
+            if (uploadError) throw uploadError;
+
+            const url = sb.storage.from(KB_IMAGES_BUCKET).getPublicUrl(path).data?.publicUrl;
+            if (!url) {
+                void sb.storage.from(KB_IMAGES_BUCKET).remove([path]);
+                throw new Error("Upload succeeded but Supabase returned no public URL.");
+            }
+
+            const nextOrder = await nextDisplayOrder("kb_images", { user_id: userId });
+
+            const { data, error } = await sb
+                .from("kb_images")
+                .insert({
+                    user_id: userId,
+                    url,
+                    caption,
+                    display_order: nextOrder,
+                })
+                .select("id,url,caption,display_order,created_at")
+                .single();
+            if (error) {
+                void sb.storage.from(KB_IMAGES_BUCKET).remove([path]);
+                throw error;
+            }
+            return { data: data as KbImage, error: null };
         } catch (err) {
             return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
         }
