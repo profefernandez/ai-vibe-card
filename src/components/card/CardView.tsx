@@ -45,7 +45,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
 
-  const handleAnswer = useCallback(() => {}, []);
+  const handleAnswer = useCallback(() => { }, []);
 
   const rootStyle = useMemo(
     () => ({
