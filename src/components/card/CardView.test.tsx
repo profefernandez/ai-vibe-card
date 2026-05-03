@@ -63,9 +63,9 @@ describe("CardView", () => {
             </MemoryRouter>,
         );
 
-        // The classic layout renders one avatar img with alt = "<name> - <tagline>".
+        // The classic layout renders one avatar img with alt = "<name> — <tagline>".
         const img = screen.getByAltText(
-            `${fixture.display_name} - ${fixture.tagline}`,
+            `${fixture.display_name} — ${fixture.tagline}`,
         ) as HTMLImageElement;
         expect(img).toBeInTheDocument();
         expect(img.src).toBe(fixture.avatar_url);
