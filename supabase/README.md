@@ -190,7 +190,36 @@ auto-populated by the Edge runtime — don't set them manually.
     the first `[…]` substring and parse defensively, so a malformed model
     response degrades to "no matches" rather than a 500.
 
+- `refresh-sites` — cron-triggered re-scrape of stale verified sites.
+  Auth is a shared bearer secret (`REFRESH_SECRET`), **not** a JWT, so
+  the function must be deployed with `--no-verify-jwt`.
+
+  ```bash
+  supabase secrets set REFRESH_SECRET=<long-random>
+  supabase secrets set FIRECRAWL_API_KEY=<key>
+  supabase functions deploy refresh-sites --no-verify-jwt
+  ```
+
+  Notes:
+  - Re-uses the `verify-domain` re-verification logic (DNS TXT or
+    `<meta name="60watt-verify">`) via `_shared/safe-fetch.ts`. A site
+    that no longer proves ownership has `verified` flipped to false and
+    is skipped — same behaviour as the Node handler.
+  - Stale-site selection runs through a `SECURITY DEFINER` RPC,
+    `public.find_stale_sites(batch_size)`, granted only to the
+    `service_role` (migration `0006_refresh_sites_helpers.sql`). This is
+    the single place that uses the `interval` cast against
+    `refresh_interval_hours`, which PostgREST can't express directly.
+  - All DB writes use the service-role client (cron has no JWT). RLS
+    doesn't apply to that role.
+  - Bearer-secret comparison is constant-time (XOR fold over the byte
+    arrays) so the endpoint isn't a timing oracle.
+  - Update `cron/refresh-sites.sh` on the host: it now reads
+    `SUPABASE_URL` from `api/.env` and posts to
+    `${SUPABASE_URL}/functions/v1/refresh-sites`. If `SUPABASE_URL` is
+    unset it falls back to the legacy Express endpoint.
+
 ### Still on the legacy server
-- `refresh-sites` (cron), `prune-logs` (cron), `card`. Will be ported in
-  subsequent phases; the front-end shim continues to route them to the
-  Express server in the meantime.
+- `prune-logs` (cron), `card`. Will be ported in subsequent phases; the
+  front-end shim continues to route them to the Express server in the
+  meantime.
