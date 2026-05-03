@@ -25,6 +25,7 @@ export const SUPABASE_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
     "feedback",
     "verify-domain",
     "scrape-site",
+    "query-content",
 ]);
 
 export const functions = {

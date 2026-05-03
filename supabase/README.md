@@ -169,7 +169,28 @@ auto-populated by the Edge runtime — don't set them manually.
     `api/lib/sanitize-content.ts` so re-scraping a row that the legacy
     server already cleaned is idempotent.
 
+- `query-content` — AI-routed semantic search over a site's
+  `content_blocks`. Replaces `api/routes/query-content.ts`. Authenticated
+  endpoint.
+
+  ```bash
+  supabase secrets set LEMONADE_API_KEY=<key>
+  supabase secrets set LEMONADE_CONTENT_ID=<agent-id>
+  supabase functions deploy query-content
+  ```
+
+  Notes:
+  - Runs the user query through the same `sanitiseInput()` block-list as
+    the Node handler (`_shared/sanitise.ts`) before it ever reaches the
+    model.
+  - Ownership + content reads use the user-bound RLS client. Missing /
+    foreign sites surface as the same uniform `Site not found or access
+    denied` 403 the legacy handler returned.
+  - LaunchLemonade is asked for a JSON array of block indices; we extract
+    the first `[…]` substring and parse defensively, so a malformed model
+    response degrades to "no matches" rather than a 500.
+
 ### Still on the legacy server
-- `query-content`, `refresh-sites`, `prune-logs`, `card`. These will be
-  ported in subsequent phases; the front-end shim continues to route
-  them to the Express server in the meantime.
+- `refresh-sites` (cron), `prune-logs` (cron), `card`. Will be ported in
+  subsequent phases; the front-end shim continues to route them to the
+  Express server in the meantime.
