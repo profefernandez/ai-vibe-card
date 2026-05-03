@@ -48,3 +48,16 @@ export type QueryBuilder<T = unknown> = ReturnType<
 
 export const from = <T = unknown>(table: string): QueryBuilder<T> =>
     getSupabase().from(table) as QueryBuilder<T>;
+
+/**
+ * `db.rpc(name, args)` — thin pass-through to `supabase.rpc()`.
+ *
+ * Used by callers that need to invoke a Postgres function (typically a
+ * `SECURITY DEFINER` helper exposed via `GRANT EXECUTE` to anon /
+ * authenticated). Returns the same `{ data, error }` shape as `from()`.
+ */
+export const rpc = (
+    name: string,
+    args?: Record<string, unknown>,
+): ReturnType<ReturnType<typeof getSupabase>["rpc"]> =>
+    getSupabase().rpc(name, args);

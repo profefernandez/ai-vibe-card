@@ -11,9 +11,16 @@ interface FooterBarProps {
 
 const FooterBar = ({ ctaUrl = "#", ctaLabel = "Book Time", workUrl = "#", saveContactUrl, slug }: FooterBarProps) => {
   const pageUrl = typeof window !== "undefined" ? window.location.href : "";
-  // Derive vCard URL from slug if available, otherwise fall back to prop or #
+  // Derive vCard URL from slug if available, otherwise fall back to prop or #.
+  // The vCard download is served by the `card-vcard` Supabase Edge Function
+  // (deployed with `--no-verify-jwt`); we hit it directly so a normal anchor
+  // navigation triggers the file download.
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const legacyApiBase = (import.meta.env.VITE_API_URL as string | undefined) || "/api";
   const vcardUrl = slug
-    ? `${import.meta.env.VITE_API_URL || "/api"}/card/${slug}/vcard`
+    ? supabaseUrl
+      ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/card-vcard?slug=${encodeURIComponent(slug)}`
+      : `${legacyApiBase}/card/${encodeURIComponent(slug)}/vcard`
     : (saveContactUrl ?? "#");
   const actionTileClass =
     "flex flex-1 items-center justify-center gap-2.5 sm:gap-3.5 px-3 sm:px-5 py-4 hover:bg-primary/6 transition-all duration-200 group";

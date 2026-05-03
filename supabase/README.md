@@ -247,6 +247,60 @@ auto-populated by the Edge runtime — don't set them manually.
   - Sibling host script: `cron/prune-logs.sh`. Same `SUPABASE_URL`
     fallback pattern as `cron/refresh-sites.sh`.
 
+- `card-vcard` — public vCard (.vcf) download. Replaces
+  `GET /api/card/:slug/vcard`. **Public endpoint — deploy with
+  `--no-verify-jwt`** so an anchor-tag download works for anonymous
+  visitors. Reads the profile via the `get_card_by_slug` RPC
+  (migration `0008_card_helpers.sql`) which gates on
+  `is_published = true`. Optional secret: `FRONTEND_URL` (defaults to
+  `https://ai.60wattsofclarity.com`).
+
+  ```bash
+  supabase db push                            # applies 0008_card_helpers.sql
+  supabase secrets set FRONTEND_URL=https://your-domain
+  supabase functions deploy card-vcard --no-verify-jwt
+  ```
+
+- `connection-request` — authenticated card-to-card connection request.
+  Replaces `POST /api/card/:slug/connect`. Body `{ slug, message? }`.
+  Same status codes as the Node handler (400 invalid / 404 missing /
+  400 self-connect / 409 already-pending|approved). Sends a best-effort
+  notification email via `_shared/email.ts` using the same SMTP creds
+  as the legacy server. Audits `connection_request`.
+
+  ```bash
+  supabase secrets set SMTP_HOST=<host> SMTP_PORT=587 \
+      SMTP_USER=<user> SMTP_PASS=<pass> SMTP_FROM=<from-address>
+  supabase functions deploy connection-request
+  ```
+
+- `connection-respond` — owner approves / declines a pending request.
+  Replaces `PATCH /api/connections/:id`. Body `{ id, status }` with
+  `status ∈ {"approved","declined"}`. UPDATE only fires when
+  `owner_id = auth.uid() AND status = 'pending'` (matches the legacy
+  WHERE clause + `connections_owner_update` RLS). On approval, sends
+  the `connectionApprovedEmail`. Audits `connection_${status}`.
+
+  ```bash
+  supabase functions deploy connection-respond
+  ```
+
+- `connection-query` — cross-card AI question.
+  Replaces `POST /api/connections/:id/query`. Body `{ id, question }`.
+  Reuses `_shared/sanitise.ts` (block-list pre-check + output filter).
+  Verifies an `approved` connection where the caller is a party
+  (RLS-bound), checks `target.ai_query_enabled`, fetches the target's
+  public `content_blocks` and asks LaunchLemonade. Required secrets:
+  `LEMONADE_API_KEY`, `LEMONADE_CONTENT_ID` (already set if
+  `query-content` is deployed). Audits `cross_card_query` with
+  `target_user_id` + token usage.
+
+  ```bash
+  supabase functions deploy connection-query
+  ```
+
 ### Still on the legacy server
-- `card`. Will be ported in a subsequent phase; the front-end shim
-  continues to route it to the Express server in the meantime.
+- (none — the `card` and `connections` surfaces moved to Edge Functions
+  in `card-vcard`, `connection-request`, `connection-respond`,
+  `connection-query`. The legacy `api/routes/card.ts` is kept for one
+  release as a fallback; remove once Edge Function traffic is verified.)

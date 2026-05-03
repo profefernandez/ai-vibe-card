@@ -48,6 +48,21 @@ describe("functions.invoke routing", () => {
         expect(apiFetchMock).not.toHaveBeenCalled();
     });
 
+    it.each([
+        "connection-request",
+        "connection-respond",
+        "connection-query",
+    ])("connection function %s is routed through Supabase", async (name) => {
+        const invoke = vi.fn().mockResolvedValue({ data: { ok: true }, error: null });
+        const functions = await load(invoke);
+
+        const { error } = await functions.invoke(name, { body: { id: "x" } });
+
+        expect(error).toBeNull();
+        expect(invoke).toHaveBeenCalledWith(name, { body: { id: "x" } });
+        expect(apiFetchMock).not.toHaveBeenCalled();
+    });
+
     it("unported names fall through to apiFetch", async () => {
         const invoke = vi.fn();
         const functions = await load(invoke);
