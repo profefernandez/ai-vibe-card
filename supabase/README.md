@@ -110,8 +110,23 @@ auto-populated by the Edge runtime — don't set them manually.
   `sites` on `user_id` (single-tenant — no `organization_id` column),
   unlike the legacy Express handler.
 
+- `feedback` — anonymous thumbs-up / thumbs-down on a chat reply.
+  Replaces `api/routes/feedback.ts`. **Public endpoint — deploy with
+  `--no-verify-jwt`.** Requires migration `0005_ai_feedback.sql`
+  (creates `ai_feedback` and `feedback_consumed`). Required secret:
+  `FEEDBACK_HMAC_SECRET` (or its `JWT_SECRET` fallback) — must be the
+  same value used by `lemonade-chat` so tokens minted there verify
+  here. While the legacy `/api/feedback` Express endpoint is still
+  deployed, it must share the same secret too; once both `lemonade-chat`
+  and `feedback` run on Supabase you can rotate the secret freely.
+
+  ```bash
+  supabase db push                 # applies 0005_ai_feedback.sql
+  supabase functions deploy feedback --no-verify-jwt
+  ```
+
 ### Still on the legacy server
 - `scrape-site`, `verify-domain`, `query-content`, `refresh-sites`,
-  `prune-logs`, `card`, `feedback`. These will be ported in subsequent
-  phases; the front-end shim continues to route them to the Express
-  server in the meantime.
+  `prune-logs`, `card`. These will be ported in subsequent phases; the
+  front-end shim continues to route them to the Express server in the
+  meantime.

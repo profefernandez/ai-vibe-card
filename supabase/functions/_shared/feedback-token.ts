@@ -124,3 +124,112 @@ export async function issueFeedbackToken(args: IssueArgs): Promise<string> {
 }
 
 export const FEEDBACK_TOKEN_TTL_SECONDS = TOKEN_TTL_SECONDS;
+
+// ── Verifier ────────────────────────────────────────────────────────────────
+
+function b64urlDecode(s: string): string {
+    // Restore base64 padding before atob.
+    const padded = s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4);
+    const bin = atob(padded);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+}
+
+function hexToBytes(hex: string): Uint8Array {
+    if (hex.length % 2 !== 0) return new Uint8Array(0);
+    const out = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < out.length; i++) {
+        const byte = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+        if (Number.isNaN(byte)) return new Uint8Array(0);
+        out[i] = byte;
+    }
+    return out;
+}
+
+/** Constant-time equality on two equal-length byte arrays. */
+function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+}
+
+export interface VerifyArgs {
+    token: string;
+    profileId: string | null;
+    conversationId: string | null;
+    answerText: string;
+}
+
+export type VerifyOk = { ok: true; signatureHash: string };
+export type VerifyErr = {
+    ok: false;
+    reason: "malformed" | "expired" | "signature_mismatch" | "binding_mismatch";
+};
+export type VerifyResult = VerifyOk | VerifyErr;
+
+/**
+ * Verify a token presented at feedback time. Does NOT mark the token as
+ * consumed — that responsibility belongs to the caller (an INSERT into
+ * `feedback_consumed` keyed on the returned `signatureHash` provides the
+ * unique-key replay guard).
+ *
+ * Mirrors `api/lib/feedback-token.ts:verifyFeedbackToken` byte-for-byte
+ * so tokens minted on either runtime verify on either runtime.
+ */
+export async function verifyFeedbackToken(args: VerifyArgs): Promise<VerifyResult> {
+    let parsed: SignedToken;
+    try {
+        parsed = JSON.parse(b64urlDecode(args.token)) as SignedToken;
+    } catch {
+        return { ok: false, reason: "malformed" };
+    }
+
+    if (
+        (typeof parsed.p !== "string" && parsed.p !== null) ||
+        (typeof parsed.c !== "string" && parsed.c !== null) ||
+        typeof parsed.h !== "string" ||
+        typeof parsed.n !== "string" ||
+        typeof parsed.e !== "number" ||
+        typeof parsed.s !== "string"
+    ) {
+        return { ok: false, reason: "malformed" };
+    }
+
+    if (parsed.e < Math.floor(Date.now() / 1000)) {
+        return { ok: false, reason: "expired" };
+    }
+
+    const expected = await hmac({
+        p: parsed.p,
+        c: parsed.c,
+        h: parsed.h,
+        n: parsed.n,
+        e: parsed.e,
+    });
+    const expectedBytes = hexToBytes(expected);
+    const providedBytes = hexToBytes(parsed.s);
+    if (
+        expectedBytes.length === 0 ||
+        providedBytes.length === 0 ||
+        !timingSafeEqualBytes(expectedBytes, providedBytes)
+    ) {
+        return { ok: false, reason: "signature_mismatch" };
+    }
+
+    // Binding check: feedback claims must match what was signed.
+    const argHash = await sha256Hex(args.answerText);
+    if (
+        parsed.p !== args.profileId ||
+        parsed.c !== args.conversationId ||
+        parsed.h !== argHash
+    ) {
+        return { ok: false, reason: "binding_mismatch" };
+    }
+
+    // signatureHash uniquely identifies this token for the feedback_consumed
+    // PK. Keyed on the signature itself (which embeds the nonce).
+    const signatureHash = await sha256Hex(parsed.s);
+    return { ok: true, signatureHash };
+}

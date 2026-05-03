@@ -22,6 +22,7 @@ import { getSupabase } from "@/lib/supabase";
 export const SUPABASE_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
     "test-api-connection",
     "lemonade-chat",
+    "feedback",
 ]);
 
 export const functions = {
