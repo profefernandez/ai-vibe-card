@@ -74,7 +74,15 @@ export async function sendEmail(opts: EmailOpts): Promise<boolean> {
     }
 }
 
-/** Light HTML escape — identical char set to `api/lib/email.ts`. */
+/** Light HTML escape — identical char set to `api/lib/email.ts`.
+ *
+ * The legacy Node helper *strips* these characters rather than replacing
+ * them with entities (`&lt;` etc.). We deliberately match that behaviour
+ * byte-for-byte so that mail rendered by either runtime looks the same
+ * during the cutover. Templates only ever interpolate trusted-ish
+ * display fields (display name, message) — never user-supplied HTML —
+ * so stripping is a safe (if blunt) escape strategy.
+ */
 function esc(s: string): string {
     return s.replace(/[<>&"']/g, "");
 }
@@ -105,4 +113,44 @@ export function connectionApprovedEmail(
         text: `${safeName} has accepted your connection request. You are now connected!`,
         html: `<p><strong>${safeName}</strong> has accepted your connection request. You are now connected!</p>`,
     };
+}
+
+/**
+ * Resolve a user's email by id, with a graceful fallback path.
+ *
+ * Primary source is Supabase Auth (`auth.users`) via the admin API,
+ * which is where every Supabase-managed user lives. As a defence in
+ * depth — and to support installs that still have legacy `users` rows
+ * with a populated `email` column — we fall back to a `users` table
+ * read if the admin lookup didn't return one. Both reads use the
+ * service-role client and are best-effort: any throw / missing row
+ * resolves to `null` so the caller's main flow (creating a connection
+ * row, approving a request) never fails because of an email lookup.
+ */
+export async function lookupUserEmail(
+    serviceClient: { auth: { admin: { getUserById: (id: string) => Promise<unknown> } }; from: (table: string) => unknown },
+    userId: string,
+): Promise<string | null> {
+    try {
+        // deno-lint-ignore no-explicit-any
+        const adminApi = serviceClient.auth.admin as any;
+        const result = await adminApi.getUserById(userId);
+        const email = result?.data?.user?.email;
+        if (typeof email === "string" && email) return email;
+    } catch (err) {
+        console.warn("email: auth.admin.getUserById threw:", err);
+    }
+    try {
+        // deno-lint-ignore no-explicit-any
+        const builder = (serviceClient.from("users") as any)
+            .select("email")
+            .eq("id", userId)
+            .maybeSingle();
+        const { data } = await builder;
+        const email = data?.email;
+        if (typeof email === "string" && email) return email;
+    } catch (err) {
+        console.warn("email: legacy users table lookup threw:", err);
+    }
+    return null;
 }

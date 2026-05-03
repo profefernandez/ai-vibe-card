@@ -3,9 +3,9 @@
 -- Public-card RPC used by `src/pages/CardShare.tsx`.
 --
 -- Why an RPC instead of a plain `from('profiles').select(...)`:
---   * Anon callers need the profile *and* a single `site_id` (the most
---     recently-created verified site) so the public-card AI search panel
---     can call `lemonade-chat`.
+--   * Anon callers need the profile *and* a single `site_id` (the
+--     oldest-created verified site, mirroring `api/routes/card.ts:42`)
+--     so the public-card AI search panel can call `lemonade-chat`.
 --   * The `sites` table currently has owner-only RLS — broadening it to
 --     anon would expose `verification_token`, `last_error`, etc. which we
 --     don't want to publish.

@@ -31,9 +31,13 @@ const CardShare = () => {
         if (!slug) return;
         let cancelled = false;
         (async () => {
-            const { data, error } = await db.rpc("get_card_by_slug", { p_slug: slug });
+            // `get_card_by_slug` returns a TABLE row — chain `.maybeSingle()`
+            // so supabase-js unwraps it into `data` (or `null`) for us.
+            const builder = db.rpc("get_card_by_slug", { p_slug: slug }) as unknown as {
+                maybeSingle: () => Promise<{ data: CardApiResponse | null; error: { message: string } | null }>;
+            };
+            const { data: row, error } = await builder.maybeSingle();
             if (cancelled) return;
-            const row = Array.isArray(data) ? (data[0] as CardApiResponse | undefined) : null;
             if (error || !row) {
                 setNotFound(true);
                 setLoading(false);

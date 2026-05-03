@@ -14,7 +14,7 @@
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { logAudit, clientIp } from "../_shared/audit.ts";
-import { connectionApprovedEmail, sendEmail } from "../_shared/email.ts";
+import { connectionApprovedEmail, lookupUserEmail, sendEmail } from "../_shared/email.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,10 +31,6 @@ interface UpdatedRow {
 
 interface OwnerProfile {
     display_name: string | null;
-}
-
-interface RequesterUser {
-    email: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -95,26 +91,13 @@ Deno.serve(async (req: Request) => {
     // ── Best-effort approval email ──────────────────────────────────────
     if (status === "approved") {
         try {
-            const { data: ownerProfile } = await serviceClient
-                .from("profiles")
-                .select("display_name")
-                .eq("user_id", user.id)
-                .maybeSingle<OwnerProfile>();
-
-            const { data: requesterAuth } = await serviceClient.auth.admin.getUserById(
-                updated.requester_id,
-            );
-            let requesterEmail =
-                (requesterAuth?.user as { email?: string } | null)?.email ?? null;
-            if (!requesterEmail) {
-                const { data: legacyUser } = await serviceClient
-                    .from("users")
-                    .select("email")
-                    .eq("id", updated.requester_id)
-                    .maybeSingle<RequesterUser>();
-                requesterEmail = legacyUser?.email ?? null;
-            }
+            const requesterEmail = await lookupUserEmail(serviceClient, updated.requester_id);
             if (requesterEmail) {
+                const { data: ownerProfile } = await serviceClient
+                    .from("profiles")
+                    .select("display_name")
+                    .eq("user_id", user.id)
+                    .maybeSingle<OwnerProfile>();
                 const ownerName = ownerProfile?.display_name?.trim() || "Someone";
                 sendEmail(connectionApprovedEmail(requesterEmail, ownerName)).catch(
                     () => { /* best effort */ },

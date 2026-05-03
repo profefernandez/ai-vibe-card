@@ -15,7 +15,7 @@
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { logAudit, clientIp } from "../_shared/audit.ts";
-import { connectionRequestEmail, sendEmail } from "../_shared/email.ts";
+import { connectionRequestEmail, lookupUserEmail, sendEmail } from "../_shared/email.ts";
 
 const SLUG_RE = /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/i;
 
@@ -35,10 +35,6 @@ interface ConnectionRow {
 
 interface RequesterProfile {
     display_name: string | null;
-}
-
-interface OwnerUser {
-    email: string | null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -136,31 +132,17 @@ Deno.serve(async (req: Request) => {
 
     // ── Best-effort notification email ──────────────────────────────────
     try {
-        const { data: ownerUser } = await serviceClient.auth.admin.getUserById(ownerId);
-        const ownerEmail = (ownerUser?.user as { email?: string } | null)?.email ?? null;
-        const { data: requesterProfile } = await serviceClient
-            .from("profiles")
-            .select("display_name")
-            .eq("user_id", user.id)
-            .maybeSingle<RequesterProfile>();
+        const ownerEmail = await lookupUserEmail(serviceClient, ownerId);
         if (ownerEmail) {
+            const { data: requesterProfile } = await serviceClient
+                .from("profiles")
+                .select("display_name")
+                .eq("user_id", user.id)
+                .maybeSingle<RequesterProfile>();
             const requesterName = requesterProfile?.display_name?.trim() || "Someone";
             sendEmail(connectionRequestEmail(ownerEmail, requesterName, safeMessage)).catch(
                 () => { /* best effort */ },
             );
-        } else {
-            // Fall back to a `users` table if the legacy schema still has one.
-            const { data: legacyUser } = await serviceClient
-                .from("users")
-                .select("email")
-                .eq("id", ownerId)
-                .maybeSingle<OwnerUser>();
-            if (legacyUser?.email) {
-                const requesterName = requesterProfile?.display_name?.trim() || "Someone";
-                sendEmail(connectionRequestEmail(legacyUser.email, requesterName, safeMessage)).catch(
-                    () => { /* best effort */ },
-                );
-            }
         }
     } catch (err) {
         console.warn("connection-request: email lookup threw:", err);
