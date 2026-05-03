@@ -178,6 +178,17 @@ interface ResolvedHost {
     family: 4 | 6;
 }
 
+/**
+ * Resolve + validate a hostname without performing a fetch. Used by
+ * scrape-site to refuse obviously-bad hostnames before handing the URL off
+ * to Firecrawl (which performs the actual crawl from their infra).
+ *
+ * Throws `SafeFetchError` on a forbidden / unresolvable host.
+ */
+export async function assertPublicHost(hostname: string): Promise<void> {
+    await resolveAndValidate(hostname);
+}
+
 async function resolveAndValidate(rawHostname: string): Promise<ResolvedHost> {
     const hostname = rawHostname.startsWith("[") && rawHostname.endsWith("]")
         ? rawHostname.slice(1, -1)
