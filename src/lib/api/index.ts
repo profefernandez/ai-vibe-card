@@ -8,7 +8,7 @@ export { functions } from "./functions";
 export { upload } from "./upload";
 export { kbImages, type KbImage } from "./kbImages";
 export { kbFolders, kbItems, type KbFolder, type KbItem } from "./kb";
-export { from, type DbResult, QueryBuilder } from "./tables";
+export { from, type DbResult, type QueryBuilder } from "./tables";
 export type { Session, User, AuthEvent, AuthListener } from "./client";
 export { loadSession, saveSession } from "./client";
 

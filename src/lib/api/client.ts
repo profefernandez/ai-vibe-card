@@ -69,7 +69,10 @@ export function loadSession(): Session | null {
 
 /**
  * Compatibility shim. `null` signs the user out of Supabase; any other value
- * is a no-op (Supabase already persisted it).
+ * is a no-op — supabase-js owns the canonical session and our `_cachedSession`
+ * mirror is kept in sync by the `onAuthStateChange` listener installed in
+ * `installSupabaseBridge()`. Hand-injecting a session object would risk
+ * staleness without unblocking any caller.
  */
 export function saveSession(session: Session | null): void {
     if (session === null) {
@@ -79,9 +82,8 @@ export function saveSession(session: Session | null): void {
             // ignore
         }
         _cachedSession = null;
-    } else {
-        _cachedSession = session;
     }
+    // else: no-op — see docblock above.
 }
 
 // ─── Auth state listeners ─────────────────────────────────────────────────────
