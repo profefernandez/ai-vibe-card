@@ -23,6 +23,7 @@ export const SUPABASE_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
     "test-api-connection",
     "lemonade-chat",
     "feedback",
+    "verify-domain",
 ]);
 
 export const functions = {

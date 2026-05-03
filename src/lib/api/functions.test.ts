@@ -84,7 +84,7 @@ describe("functions.invoke routing", () => {
         const functions = await load(invoke);
         apiFetchMock.mockRejectedValue(new Error("network down"));
 
-        const { error } = await functions.invoke("verify-domain", { body: {} });
+        const { error } = await functions.invoke("scrape-site", { body: {} });
 
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe("network down");

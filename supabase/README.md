@@ -125,8 +125,25 @@ auto-populated by the Edge runtime — don't set them manually.
   supabase functions deploy feedback --no-verify-jwt
   ```
 
+- `verify-domain` — confirms site ownership via DNS TXT or HTML meta tag
+  before we'll scrape it. Replaces `api/routes/verify-domain.ts`.
+  Authenticated endpoint (deploy with default JWT verification).
+
+  ```bash
+  supabase functions deploy verify-domain
+  ```
+
+  Implementation note: Deno's built-in `fetch` does not expose a TCP
+  `lookup` hook, so the SSRF defence is the trio (a) the Deno-Deploy
+  network sandbox (no host-internal access), (b) per-hostname DoH
+  resolution against Cloudflare `1.1.1.1` with **all** A + AAAA records
+  validated against the same forbidden-range set as the legacy
+  `api/lib/safe-fetch.ts`, and (c) `redirect: "manual"` with per-hop
+  re-validation. DNS TXT lookups go through the same DoH endpoint
+  (`dnsTxt()` in `_shared/safe-fetch.ts`).
+
 ### Still on the legacy server
-- `scrape-site`, `verify-domain`, `query-content`, `refresh-sites`,
+- `scrape-site`, `query-content`, `refresh-sites`,
   `prune-logs`, `card`. These will be ported in subsequent phases; the
   front-end shim continues to route them to the Express server in the
   meantime.
