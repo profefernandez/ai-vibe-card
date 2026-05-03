@@ -37,7 +37,6 @@ import { router as uploadRouter } from "./routes/upload.js";
 import { router as kbImagesRouter, uploadRouter as kbImageUploadRouter } from "./routes/kbImages.js";
 import { router as kbRouter } from "./routes/kb.js";
 import { router as kbUploadRouter } from "./routes/kbUpload.js";
-import { router as cardRouter } from "./routes/card.js";
 import { router as feedbackRouter } from "./routes/feedback.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -82,7 +81,7 @@ export function validateEnv(): void {
     if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64 || !/^[0-9a-f]{64}$/i.test(ENCRYPTION_KEY)) {
         fatal(
             'ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
-                'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+            'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
         );
     }
 }
@@ -238,8 +237,6 @@ export function createApp(): Express {
     const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, please try again later" } });
     const chatLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, message: { error: "Too many requests, please slow down" }, keyGenerator: userOrIpKey });
     const queryContentLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: "Too many queries, please slow down" }, keyGenerator: userOrIpKey });
-    const connectLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many connection requests, please try again later" } });
-    const connectionQueryLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, message: { error: "Too many AI queries, please slow down" }, keyGenerator: userOrIpKey });
 
     // Cron endpoint protection. Auth is via REFRESH_SECRET (validated inside the
     // handler), but we still rate-limit per token so a leaked secret can't be
@@ -289,8 +286,6 @@ export function createApp(): Express {
     // keying strategy. Cap is per-token, so the two cron endpoints share a
     // budget; 5/min is generous for either.
     app.use("/api/functions/prune-logs", refreshLimiter);
-    app.use("/api/card/:slug/connect", connectLimiter);
-    app.use("/api/connections/:id/query", connectionQueryLimiter);
 
     app.use("/api/tables", tablesRouter);
     app.use("/api/functions", functionsRouter);
@@ -299,8 +294,6 @@ export function createApp(): Express {
     app.use("/api/kb-images", kbImagesRouter);
     app.use("/api/kb", kbRouter);
     app.use("/api/kb/upload", kbUploadRouter);
-    app.use("/api/card", cardRouter);
-    app.use("/api/connections", cardRouter);
     app.use("/api/feedback", feedbackRouter);
 
     // Dynamic robots.txt — renders structured JSON into standard robots.txt format.

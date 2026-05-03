@@ -94,7 +94,6 @@ api/
 │   └── requireRole.ts    # Role-based route guard
 ├── routes/
 │   ├── auth.ts                # /api/auth/login, /register, /refresh, /logout
-│   ├── card.ts                # /api/card (owner) + /api/card/:slug (public) + /api/connections
 │   ├── feedback.ts            # /api/feedback (HMAC-bound thumbs up/down on AI responses)
 │   ├── kb.ts                  # /api/kb/folders + /api/kb/items
 │   ├── kbImages.ts            # /api/kb/images CRUD
@@ -179,23 +178,23 @@ database/
 
 ## Database Tables
 
-| Table             | Purpose                                                    |
-| ----------------- | ---------------------------------------------------------- |
+| Table             | Purpose                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `users`           | Auth accounts (email + bcrypt password hash). NOTE: the columns `reset_token` and `reset_token_expires_at` exist in the schema (initial migration) but no route currently reads or writes them — password reset is **not yet implemented**. The columns are retained pending that feature; do not drop without coordinating with whoever picks up the reset flow. |
-| `profiles`        | Owner's public card info (name, bio, avatar, Calendly URL) |
-| `sites`           | Imported sites (domain, scrape status, page count)         |
-| `site_pages`      | Raw scraped pages (markdown, html, metadata JSONB)         |
-| `content_blocks`  | Parsed content (heading, body, images[], tags[], category) |
-| `ai_preferences`  | AI persona config (personality, system_prompt, rules)      |
-| `api_connections` | External API keys per user (AES-256-GCM encrypted)         |
-| `received_cards`  | Visitor card exchanges / leads                             |
-| `organizations`   | Org tenancy boundary for RLS                               |
-| `memberships`     | User ↔ org with role                                       |
-| `kb_folders`      | KB folders (per site, flag `use_for_ai` opts into AI context) |
-| `kb_items`        | KB items — text/url/image/file (citable unit for AI grounding) |
-| `kb_images`       | KB image metadata + storage refs                           |
-| `feedback`        | Thumbs up/down on AI responses (HMAC-bound feedback tokens) |
-| `sessions`        | Refresh-token sessions (per JWT issuance)                  |
+| `profiles`        | Owner's public card info (name, bio, avatar, Calendly URL)                                                                                                                                                                                                                                                                                                        |
+| `sites`           | Imported sites (domain, scrape status, page count)                                                                                                                                                                                                                                                                                                                |
+| `site_pages`      | Raw scraped pages (markdown, html, metadata JSONB)                                                                                                                                                                                                                                                                                                                |
+| `content_blocks`  | Parsed content (heading, body, images[], tags[], category)                                                                                                                                                                                                                                                                                                        |
+| `ai_preferences`  | AI persona config (personality, system_prompt, rules)                                                                                                                                                                                                                                                                                                             |
+| `api_connections` | External API keys per user (AES-256-GCM encrypted)                                                                                                                                                                                                                                                                                                                |
+| `received_cards`  | Visitor card exchanges / leads                                                                                                                                                                                                                                                                                                                                    |
+| `organizations`   | Org tenancy boundary for RLS                                                                                                                                                                                                                                                                                                                                      |
+| `memberships`     | User ↔ org with role                                                                                                                                                                                                                                                                                                                                              |
+| `kb_folders`      | KB folders (per site, flag `use_for_ai` opts into AI context)                                                                                                                                                                                                                                                                                                     |
+| `kb_items`        | KB items — text/url/image/file (citable unit for AI grounding)                                                                                                                                                                                                                                                                                                    |
+| `kb_images`       | KB image metadata + storage refs                                                                                                                                                                                                                                                                                                                                  |
+| `feedback`        | Thumbs up/down on AI responses (HMAC-bound feedback tokens)                                                                                                                                                                                                                                                                                                       |
+| `sessions`        | Refresh-token sessions (per JWT issuance)                                                                                                                                                                                                                                                                                                                         |
 
 ---
 

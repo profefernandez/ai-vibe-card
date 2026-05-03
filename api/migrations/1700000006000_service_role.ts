@@ -14,7 +14,6 @@ import type { MigrationBuilder } from "node-pg-migrate";
  *   aivibe_service  — connection string in DATABASE_URL_SERVICE. Bypasses
  *                     RLS. Used only by code paths that legitimately serve
  *                     unauthenticated traffic or run as cron:
- *                       - GET  /api/card/:slug
  *                       - GET  /robots.txt
  *                       - POST /api/feedback
  *                       - POST /api/functions/lemonade-chat (visitor)

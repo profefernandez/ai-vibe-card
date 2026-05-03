@@ -7,9 +7,8 @@ import type { MigrationBuilder } from "node-pg-migrate";
  *
  * The original constraint allows BOTH `(A→B)` and `(B→A)` rows to coexist —
  * so two users could each open a "pending" request to the other and the DB
- * had no opinion. The route handler in `routes/card.ts` (search for
- * "either direction") checks for the reciprocal pair in code, but enforcement
- * belonged in the database.
+ * had no opinion. Application code used to check for the reciprocal pair, but
+ * enforcement belonged in the database.
  *
  * Refusal-to-apply policy: this migration does NOT auto-delete reciprocal
  * duplicates. If any exist, the up() raises and the operator must reconcile

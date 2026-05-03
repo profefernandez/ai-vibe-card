@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import DOMPurify from "dompurify";
 import profilePhoto from "@/assets/profile-photo.png";
@@ -8,7 +8,6 @@ import ExplorePanel from "./ExplorePanel";
 import HeroSlider, { kbImagesToSlides } from "./HeroSlider";
 import FeatureIcons from "./FeatureIcons";
 import FooterBar from "./FooterBar";
-import LayoutTuner, { type LayoutTunerValues } from "./LayoutTuner";
 import { CalendarDays, Download, X } from "lucide-react";
 import { applyTheme, getCardTypographyStyles } from "@/lib/theme";
 import { apiClient as db, type KbImage } from "@/lib/apiClient";
@@ -42,130 +41,21 @@ const PANEL_DOT_TEXTURE: React.CSSProperties = {
   backgroundSize: "18px 18px",
 };
 
-const LAYOUT_TUNER_STORAGE_KEY = "card-layout-tuner:v1";
-
-const DEFAULT_LAYOUT_TUNER_VALUES: LayoutTunerValues = {
-  leftRatio: 20,
-  rightRatio: 28,
-  gap: 12,
-  gridShiftY: 0,
-  leftOffsetY: 0,
-  middleOffsetY: 0,
-  rightOffsetY: 0,
-  heroMinHeight: 280,
-  heroOffsetY: 0,
-  featureOffsetY: 0,
-  testimonialOffsetY: 0,
-};
-
-type DragTarget = "left" | "right";
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function formatTrack(ratio: number) {
-  return `calc((100% - (2 * var(--card-grid-gap))) * ${ratio / 100})`;
-}
-
 const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta = true }: CardViewProps) => {
-  const [answerKey, setAnswerKey] = useState(0);
   const [kbImages, setKbImages] = useState<KbImage[]>([]);
   const [isCtaOpen, setIsCtaOpen] = useState(false);
-  const [layoutTunerValues, setLayoutTunerValues] = useState<LayoutTunerValues>(DEFAULT_LAYOUT_TUNER_VALUES);
-  const [dragTarget, setDragTarget] = useState<DragTarget | null>(null);
-  const gridRef = useRef<HTMLDivElement | null>(null);
-  const isDev = import.meta.env.DEV;
 
-  const handleAnswer = useCallback(() => setAnswerKey((k) => k + 1), []);
-
-  const middleRatio = useMemo(
-    () => 100 - layoutTunerValues.leftRatio - layoutTunerValues.rightRatio,
-    [layoutTunerValues.leftRatio, layoutTunerValues.rightRatio],
-  );
-
-  const gridTemplateColumns = useMemo(
-    () => [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio].map(formatTrack).join(" "),
-    [layoutTunerValues.leftRatio, middleRatio, layoutTunerValues.rightRatio],
-  );
+  const handleAnswer = useCallback(() => {}, []);
 
   const rootStyle = useMemo(
     () => ({
       ...getCardTypographyStyles(profile?.font_family),
       backgroundImage:
         "radial-gradient(circle at 18% 18%, hsl(var(--primary) / 0.12), transparent 24%), radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.08), transparent 55%), radial-gradient(circle at 85% 80%, hsl(var(--primary) / 0.05), transparent 50%), linear-gradient(180deg, hsl(222 20% 7%) 0%, hsl(222 22% 5%) 100%)",
-      "--card-grid-gap": `${layoutTunerValues.gap}px`,
-      "--desktop-grid-columns": gridTemplateColumns,
-      "--card-grid-shift-y": `${layoutTunerValues.gridShiftY}px`,
-      "--profile-offset-y": `${layoutTunerValues.leftOffsetY}px`,
-      "--content-offset-y": `${layoutTunerValues.middleOffsetY}px`,
-      "--chat-offset-y": `${layoutTunerValues.rightOffsetY}px`,
-      "--hero-min-height": `${layoutTunerValues.heroMinHeight}px`,
-      "--hero-offset-y": `${layoutTunerValues.heroOffsetY}px`,
-      "--feature-offset-y": `${layoutTunerValues.featureOffsetY}px`,
-      "--testimonial-offset-y": `${layoutTunerValues.testimonialOffsetY}px`,
+      "--desktop-grid-columns": "minmax(220px,0.75fr) minmax(0,1.95fr) minmax(300px,1.05fr)",
     }) as React.CSSProperties,
-    [gridTemplateColumns, layoutTunerValues, profile?.font_family],
+    [profile?.font_family],
   );
-
-  useEffect(() => {
-    if (!isDev || typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(LAYOUT_TUNER_STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as Partial<LayoutTunerValues>;
-      setLayoutTunerValues((current) => ({ ...current, ...parsed }));
-    } catch {
-      window.localStorage.removeItem(LAYOUT_TUNER_STORAGE_KEY);
-    }
-  }, [isDev]);
-
-  useEffect(() => {
-    if (!isDev || typeof window === "undefined") return;
-    window.localStorage.setItem(LAYOUT_TUNER_STORAGE_KEY, JSON.stringify(layoutTunerValues));
-  }, [isDev, layoutTunerValues]);
-
-  useEffect(() => {
-    if (!dragTarget || !gridRef.current) return;
-
-    const handleMove = (event: MouseEvent) => {
-      const rect = gridRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const usableWidth = rect.width - layoutTunerValues.gap * 2;
-      if (usableWidth <= 0) return;
-
-      const minLeftRatio = (190 / usableWidth) * 100;
-      const minMiddleRatio = (360 / usableWidth) * 100;
-      const minRightRatio = (260 / usableWidth) * 100;
-
-      if (dragTarget === "left") {
-        const nextLeftRatio = clamp(
-          (((event.clientX - rect.left) - layoutTunerValues.gap / 2) / usableWidth) * 100,
-          minLeftRatio,
-          100 - layoutTunerValues.rightRatio - minMiddleRatio,
-        );
-        setLayoutTunerValues((current) => ({ ...current, leftRatio: Number(nextLeftRatio.toFixed(2)) }));
-        return;
-      }
-
-      const nextRightRatio = clamp(
-        (((rect.right - event.clientX) - layoutTunerValues.gap / 2) / usableWidth) * 100,
-        minRightRatio,
-        100 - layoutTunerValues.leftRatio - minMiddleRatio,
-      );
-      setLayoutTunerValues((current) => ({ ...current, rightRatio: Number(nextRightRatio.toFixed(2)) }));
-    };
-
-    const handleUp = () => setDragTarget(null);
-
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseup", handleUp);
-    return () => {
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseup", handleUp);
-    };
-  }, [dragTarget, layoutTunerValues.gap, layoutTunerValues.leftRatio, layoutTunerValues.rightRatio]);
 
   // Load KB images for the hero slider
   useEffect(() => {
@@ -259,50 +149,14 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
       {/* ── Three-column bento grid ── */}
       {/* md (768px): 2-col profile+content; xl (1280px+): add AI panel column */}
       <div
-        ref={gridRef}
-        className="relative flex-1 grid grid-cols-1 md:grid-cols-[260px_1fr] xl:[grid-template-columns:var(--desktop-grid-columns)] px-3 pb-3 pt-3 min-h-0"
-        style={{
-          gap: "var(--card-grid-gap)",
-          transform: "translateY(var(--card-grid-shift-y))",
-        }}
+        className="relative flex-1 grid grid-cols-1 gap-3 md:grid-cols-[260px_1fr] xl:[grid-template-columns:var(--desktop-grid-columns)] px-3 pb-3 pt-3 min-h-0"
       >
-
-        {isDev && (
-          <>
-            <button
-              type="button"
-              aria-label="Resize between profile and middle panels"
-              onMouseDown={() => setDragTarget("left")}
-              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
-              style={{
-                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + (var(--card-grid-gap) / 2))`,
-              }}
-            >
-              <span className="h-10 w-1 rounded-full bg-primary/70" />
-            </button>
-            <button
-              type="button"
-              aria-label="Resize between middle and chat panels"
-              onMouseDown={() => setDragTarget("right")}
-              className="absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 cursor-col-resize items-center justify-center rounded-full bg-primary/10 text-primary xl:flex"
-              style={{
-                left: `calc(${formatTrack(layoutTunerValues.leftRatio)} + ${formatTrack(middleRatio)} + (var(--card-grid-gap) * 1.5))`,
-              }}
-            >
-              <span className="h-10 w-1 rounded-full bg-primary/70" />
-            </button>
-          </>
-        )}
-
         {/* ════════════════════════════════════════
             COLUMN 1 — Profile card
             ════════════════════════════════════════ */}
         <aside
           className={`${PANEL_CLASS} flex flex-col overflow-y-auto`}
-          style={{
-            ...PANEL_DOT_TEXTURE,
-            transform: "translateY(var(--profile-offset-y))",
-          }}
+          style={PANEL_DOT_TEXTURE}
           aria-label="Profile"
         >
           <div className="flex flex-col items-center text-center px-5 md:px-6 pt-6 pb-6 gap-4.5">
@@ -390,18 +244,10 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             ════════════════════════════════════════ */}
         <main
           className={`${PANEL_CLASS} flex min-w-0 overflow-hidden relative`}
-          style={{
-            ...PANEL_DOT_TEXTURE,
-            transform: "translateY(var(--content-offset-y))",
-          }}
+          style={PANEL_DOT_TEXTURE}
           aria-label="Content"
         >
-          <div
-            className="absolute inset-0"
-            style={{
-              transform: "translateY(var(--hero-offset-y))",
-            }}
-          >
+          <div className="absolute inset-0">
             <HeroSlider
               slides={heroSlides}
               headline={heroHeadline}
@@ -414,7 +260,6 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
           <div className="relative z-10 mt-auto flex w-full flex-col bg-gradient-to-t from-black/88 via-black/52 to-transparent pt-36 md:pt-40">
             <div
               className="px-4 md:px-5 pb-3 flex-shrink-0"
-              style={{ transform: "translateY(var(--feature-offset-y))" }}
             >
               <FeatureIcons
                 services={serviceItems}
@@ -423,7 +268,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             </div>
 
             {testimonialText && (
-              <div className="mx-3 mb-3 flex-shrink-0" style={{ transform: "translateY(var(--testimonial-offset-y))" }}>
+              <div className="mx-3 mb-3 flex-shrink-0">
                 <div className="rounded-xl border border-white/12 bg-black/42 backdrop-blur-sm px-5 py-4 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.85)]">
                   <blockquote className="flex items-start gap-3">
                     <span className="card-font-display text-primary text-3xl leading-none flex-shrink-0 -mt-1">&ldquo;</span>
@@ -447,10 +292,7 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             ════════════════════════════════════════ */}
         <aside
           className={`${PANEL_CLASS} flex flex-col overflow-hidden min-w-0 md:col-span-2 xl:col-span-1 min-h-[420px] xl:min-h-0`}
-          style={{
-            ...PANEL_DOT_TEXTURE,
-            transform: "translateY(var(--chat-offset-y))",
-          }}
+          style={PANEL_DOT_TEXTURE}
           aria-label="AI Concierge"
         >
           <ExplorePanel
@@ -498,14 +340,6 @@ const CardView = ({ profile, siteId, profileId, showScanLink = false, applyMeta 
             />
           </motion.div>
         </div>
-      )}
-
-      {isDev && (
-        <LayoutTuner
-          values={layoutTunerValues}
-          onChange={setLayoutTunerValues}
-          onReset={() => setLayoutTunerValues(DEFAULT_LAYOUT_TUNER_VALUES)}
-        />
       )}
 
     </div>

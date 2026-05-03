@@ -30,12 +30,9 @@ import { logger } from "../logger.js";
 export const router = Router();
 
 // ── Allowed tables ────────────────────────────────────────────────────────────
-// `connections` is intentionally NOT exposed here. All connection ops go
-// through routes/card.ts, which enforces the requester/owner asymmetry
-// correctly. Exposing it generically created an asymmetric IDOR window
-// (PATCH/DELETE filtered only on owner_id, so requesters could not act on
-// their own outgoing requests via this router — and any caller assuming
-// symmetry would misbehave).
+// `connections` is intentionally NOT exposed here. Connection lifecycle now
+// lives outside the generic Express table surface, and exposing it here would
+// recreate the asymmetric IDOR window we closed earlier.
 const ALLOWED_TABLES = new Set([
     "profiles",
     "sites",

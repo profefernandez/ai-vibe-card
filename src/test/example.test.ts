@@ -10,6 +10,7 @@ import {
   siteImportSchema,
   seoSettingsSchema,
   apiConnectionSchema,
+  cardThemeSchema,
 } from "@/lib/validations";
 
 // ── cn() utility ──────────────────────────────────────────────────────────────
@@ -128,6 +129,74 @@ describe("profileSchema", () => {
 
   it("rejects display_name over 100 chars", () => {
     const result = profileSchema.safeParse({ display_name: "x".repeat(101) });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("cardThemeSchema", () => {
+  const validTheme = {
+    version: 1,
+    color: {
+      mode: "dark",
+      accent: "amber",
+      cardBackground: "#111827",
+      cardForeground: "#f8fafc",
+      mutedText: "hsl(215 16% 65%)",
+      borderColor: "rgba(255,255,255,0.12)",
+      linkColor: "#f59e0b",
+      gradientStops: ["#111827", "#0f172a"],
+    },
+    typography: {
+      fontHeading: "playfair",
+      fontBody: "inter",
+      fontMono: "mono",
+      scale: "comfortable",
+      weightHeading: "700",
+      weightBody: "400",
+      letterSpacing: "normal",
+      lineHeight: "normal",
+    },
+    shape: {
+      radius: "xl",
+      shadow: "lifted",
+      borderWidth: "thin",
+    },
+    layout: {
+      density: "standard",
+      heroVariant: "photo-stage",
+      sectionOrder: ["identity", "hero", "services", "ai-concierge", "footer"],
+      mobileSectionOrder: ["identity", "hero", "services", "ai-concierge", "footer"],
+      containerWidth: "wide",
+    },
+    motion: {
+      motionLevel: "subtle",
+    },
+    imagery: {
+      photoShape: "squircle",
+      photoFrame: "ring",
+    },
+  };
+
+  it("accepts a complete theme token document", () => {
+    expect(cardThemeSchema.safeParse(validTheme).success).toBe(true);
+  });
+
+  it("rejects duplicate desktop section IDs", () => {
+    const result = cardThemeSchema.safeParse({
+      ...validTheme,
+      layout: {
+        ...validTheme.layout,
+        sectionOrder: ["identity", "hero", "hero"],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects unknown design token values", () => {
+    const result = cardThemeSchema.safeParse({
+      ...validTheme,
+      motion: { motionLevel: "extreme" },
+    });
     expect(result.success).toBe(false);
   });
 });

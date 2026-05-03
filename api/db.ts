@@ -18,7 +18,6 @@
  *                 which has `BYPASSRLS`. Reserved for code paths that
  *                 legitimately need to read or write across organizations
  *                 without an authenticated user:
- *                   - GET  /api/card/:slug     (public profile lookup)
  *                   - GET  /robots.txt
  *                   - POST /api/feedback        (anonymous visitors)
  *                   - POST /api/functions/lemonade-chat (visitor chat)
@@ -99,7 +98,7 @@ export async function withRequestClient<T>(
     if (!userId || !orgId) {
         throw new Error(
             "withRequestClient called without an authenticated request. " +
-                "Use serviceDb for unauthenticated paths.",
+            "Use serviceDb for unauthenticated paths.",
         );
     }
 
