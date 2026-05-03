@@ -219,7 +219,34 @@ auto-populated by the Edge runtime — don't set them manually.
     `${SUPABASE_URL}/functions/v1/refresh-sites`. If `SUPABASE_URL` is
     unset it falls back to the legacy Express endpoint.
 
+- `prune-logs` — cron-triggered retention sweep. Same shared bearer
+  secret (`REFRESH_SECRET`) and `--no-verify-jwt` deploy as
+  `refresh-sites`.
+
+  ```bash
+  # REFRESH_SECRET is already set if refresh-sites is deployed.
+  supabase functions deploy prune-logs --no-verify-jwt
+  ```
+
+  Notes:
+  - Drops rows past their retention window:
+    `audit_log` > 180 d, `ai_feedback` > 365 d, `feedback_consumed` > 30 d.
+  - The legacy handler also pruned a `sessions` table; that is an
+    Express-managed table that does not exist in Supabase (Supabase auth
+    owns `auth.sessions`, which the service role isn't allowed to
+    delete from). The Edge Function intentionally skips it.
+  - The chunked delete loop lives in a SECURITY DEFINER RPC,
+    `public.prune_old_rows(target, chunk_size, max_iterations)`
+    (migration `0007_prune_logs_helpers.sql`). Targets are whitelisted
+    inside the function — `format(%I)` interpolation is safe because
+    the table name comes from the whitelist, never from the caller's
+    string. EXECUTE granted only to `service_role`.
+  - Per-target try/catch in the Edge Function: one failing table never
+    blocks the others; partial failures return HTTP 207 with an
+    `errors` map, matching the legacy handler.
+  - Sibling host script: `cron/prune-logs.sh`. Same `SUPABASE_URL`
+    fallback pattern as `cron/refresh-sites.sh`.
+
 ### Still on the legacy server
-- `prune-logs` (cron), `card`. Will be ported in subsequent phases; the
-  front-end shim continues to route them to the Express server in the
-  meantime.
+- `card`. Will be ported in a subsequent phase; the front-end shim
+  continues to route it to the Express server in the meantime.
