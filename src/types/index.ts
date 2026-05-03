@@ -10,9 +10,22 @@ export interface User {
     email: string;
 }
 
+/**
+ * Session shape used by the front end. We retain `token` (= access token) as a
+ * back-compat field for callers that still attach `Authorization: Bearer …`
+ * headers when talking to the legacy Express endpoints that haven't been
+ * ported to Supabase yet. Once those routes are gone (final cleanup phase),
+ * `token` and `refresh_token` can be dropped — Supabase JS already manages
+ * them transparently.
+ */
 export interface Session {
     user: User;
+    /** Supabase access JWT — short-lived, auto-refreshed by supabase-js. */
     token: string;
+    /** Supabase refresh token — opaque, rotated by supabase-js. */
+    refresh_token?: string;
+    /** Unix epoch (seconds) at which the access token expires. */
+    expires_at?: number;
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
