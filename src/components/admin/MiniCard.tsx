@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Connection, ChatMessage } from "@/types";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { apiClient as db } from "@/lib/apiClient";
 import {
     Globe, ExternalLink, Zap, Loader2, Send,
     Check, X, Trash2,
@@ -11,15 +12,6 @@ interface MiniCardProps {
     connection: Connection;
     userId: string;
     onAction: (id: string, action: "approved" | "declined" | "delete") => void;
-}
-
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
-function getAuthHeaders(): Record<string, string> {
-    try {
-        const session = JSON.parse(localStorage.getItem("vps_session") || "null");
-        return session?.token ? { Authorization: `Bearer ${session.token}` } : {};
-    } catch { return {}; }
 }
 
 export default function MiniCard({ connection: c, userId, onAction }: MiniCardProps) {
@@ -41,16 +33,22 @@ export default function MiniCard({ connection: c, userId, onAction }: MiniCardPr
         setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
         setQuerying(true);
         try {
-            const res = await fetch(`${API_BASE}/connections/${c.id}/query`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-                body: JSON.stringify({ question: userMsg }),
+            const { data, error } = await db.functions.invoke("connection-query", {
+                body: { id: c.id, question: userMsg },
             });
-            const data = await res.json();
-            if (res.ok) {
-                setMessages((prev) => [...prev, { role: "assistant", content: data.answer }]);
+            if (!error && data && typeof (data as { answer?: unknown }).answer === "string") {
+                const answer = (data as { answer: string }).answer;
+                setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
             } else {
-                toast({ title: data.error || "Query failed", variant: "destructive" });
+                let serverMsg: string | undefined;
+                const ctx = (error as { context?: Response } | null)?.context;
+                if (ctx && typeof ctx.json === "function") {
+                    try {
+                        const parsed = (await ctx.json()) as { error?: string };
+                        serverMsg = parsed.error;
+                    } catch { /* ignore */ }
+                }
+                toast({ title: serverMsg || error?.message || "Query failed", variant: "destructive" });
             }
         } catch {
             toast({ title: "Network error", variant: "destructive" });

@@ -39,14 +39,52 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
     }, []);
 
     const fetchConnections = async () => {
-        try {
-            const session = JSON.parse(localStorage.getItem("vps_session") || "null");
-            const res = await fetch(
-                `${import.meta.env.VITE_API_URL || "/api"}/connections`,
-                { headers: session?.token ? { Authorization: `Bearer ${session.token}` } : {} },
-            );
-            if (res.ok) setConnections(await res.json());
-        } catch { /* ignore */ }
+        // Connections RLS (`connections_party_select`) lets the caller see
+        // every row where they are requester or owner. We fetch both sides
+        // of the JOIN — `requester:profiles!requester_id(...)` and
+        // `owner:profiles!owner_id(...)` — and pick the *other* party in
+        // the mapper below so the existing `MiniCard` props stay flat.
+        const profileCols = "user_id, display_name, avatar_url, tagline, slug, bio, cta_url, cta_label, social_links, theme, accent_color, ai_query_enabled";
+        const { data, error } = await db
+            .from("connections")
+            .select(
+                `id, requester_id, owner_id, status, message, created_at, updated_at, approved_at, requester:profiles!requester_id(${profileCols}), owner:profiles!owner_id(${profileCols})`,
+            )
+            .or(`owner_id.eq.${user.id},requester_id.eq.${user.id}`)
+            .order("created_at", { ascending: false });
+        if (error || !data) {
+            setConnections([]);
+            return;
+        }
+        type RawRow = Connection & {
+            requester?: Partial<Connection> | null;
+            owner?: Partial<Connection> | null;
+        };
+        const merged: Connection[] = (data as RawRow[]).map((row) => {
+            const other = row.owner_id === user.id ? row.requester : row.owner;
+            return {
+                id: row.id,
+                requester_id: row.requester_id,
+                owner_id: row.owner_id,
+                status: row.status,
+                message: row.message,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                approved_at: row.approved_at,
+                display_name: other?.display_name,
+                avatar_url: other?.avatar_url,
+                tagline: other?.tagline,
+                slug: other?.slug,
+                bio: other?.bio,
+                cta_url: other?.cta_url,
+                cta_label: other?.cta_label,
+                social_links: other?.social_links,
+                theme: other?.theme,
+                accent_color: other?.accent_color,
+                ai_query_enabled: other?.ai_query_enabled,
+            };
+        });
+        setConnections(merged);
     };
 
     const fetchSlug = async () => {
@@ -78,23 +116,16 @@ const ConnectionsTab = ({ user }: ConnectionsTabProps) => {
 
     const handleAction = async (id: string, action: "approved" | "declined" | "delete") => {
         try {
-            const session = JSON.parse(localStorage.getItem("vps_session") || "null");
-            const headers: Record<string, string> = {
-                "Content-Type": "application/json",
-                ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-            };
             if (action === "delete") {
-                await fetch(`${import.meta.env.VITE_API_URL || "/api"}/connections/${id}`, {
-                    method: "DELETE",
-                    headers,
-                });
+                // RLS `connections_party_delete` lets either party remove the row.
+                const { error } = await db.from("connections").delete().eq("id", id);
+                if (error) throw new Error(error.message);
                 toast({ title: "Connection removed" });
             } else {
-                await fetch(`${import.meta.env.VITE_API_URL || "/api"}/connections/${id}`, {
-                    method: "PATCH",
-                    headers,
-                    body: JSON.stringify({ status: action }),
+                const { error } = await db.functions.invoke("connection-respond", {
+                    body: { id, status: action },
                 });
+                if (error) throw error;
                 toast({ title: action === "approved" ? "Connection approved" : "Connection declined" });
             }
             fetchConnections();

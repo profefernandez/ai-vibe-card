@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { auth as supabaseAuth } from "@/lib/api/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -22,8 +23,18 @@ const Auth = () => {
   const { signIn, signUp } = useAuth();
 
   useEffect(() => {
+    // Two cases land us in "set new password" mode:
+    //   1. Legacy reset link with `?reset=<token>` (still supported during
+    //      the migration; ignored — Supabase doesn't use this token).
+    //   2. Supabase password-recovery deep link, which arrives as
+    //      `#access_token=…&type=recovery` and is auto-consumed by
+    //      supabase-js when `detectSessionInUrl` is enabled. After that the
+    //      user has a temporary session and we just need to show the form.
     const resetToken = searchParams.get("reset");
-    if (resetToken) setMode("reset");
+    const hash = window.location.hash;
+    if (resetToken || hash.includes("type=recovery")) {
+      setMode("reset");
+    }
   }, [searchParams]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -37,7 +48,10 @@ const Auth = () => {
           toast({ title: "Welcome", description: "Let's set up your card." });
           navigate("/admin");
         } else {
-          toast({ title: "Please sign in", description: "An account with that email may already exist." });
+          toast({
+            title: "Check your email",
+            description: "Confirm your address to finish signing up.",
+          });
           setMode("signin");
         }
       } else {
@@ -57,12 +71,13 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "/api";
-      await fetch(`${apiUrl}/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+      await supabaseAuth.resetPasswordForEmail(email, {
+        // Supabase appends `#access_token=…&type=recovery` to this URL.
+        redirectTo: `${window.location.origin}/auth?reset=1`,
       });
+      // Always show the same confirmation regardless of whether the email
+      // exists — keeps user enumeration off the table, matching the
+      // legacy Express endpoint's behaviour.
       setForgotSent(true);
     } catch {
       setForgotSent(true);
@@ -79,15 +94,8 @@ const Auth = () => {
     }
     setLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "/api";
-      const token = searchParams.get("reset");
-      const res = await fetch(`${apiUrl}/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password: newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Reset failed");
+      const { error } = await supabaseAuth.updatePassword(newPassword);
+      if (error) throw error;
       toast({ title: "Password updated", description: "Please sign in with your new password." });
       navigate("/auth");
       setMode("signin");

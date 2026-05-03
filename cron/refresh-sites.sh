@@ -20,6 +20,7 @@ ENV_FILE="${SCRIPT_DIR}/../api/.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     REFRESH_SECRET=$(grep '^REFRESH_SECRET=' "$ENV_FILE" | cut -d= -f2-)
+    SUPABASE_URL=$(grep '^SUPABASE_URL=' "$ENV_FILE" | cut -d= -f2-)
 fi
 
 if [[ -z "${REFRESH_SECRET:-}" ]]; then
@@ -27,13 +28,21 @@ if [[ -z "${REFRESH_SECRET:-}" ]]; then
     exit 1
 fi
 
-API_URL="${API_URL:-http://127.0.0.1:3001}"
+# Prefer the Supabase Edge Function (Phase D-7). Falls back to the legacy
+# Express endpoint if SUPABASE_URL is unset, so an in-flight migration
+# keeps working.
+if [[ -n "${SUPABASE_URL:-}" ]]; then
+    REFRESH_URL="${SUPABASE_URL%/}/functions/v1/refresh-sites"
+else
+    API_URL="${API_URL:-http://127.0.0.1:3001}"
+    REFRESH_URL="${API_URL}/api/functions/refresh-sites"
+fi
 
 # ── Call the endpoint ─────────────────────────────────────────────────────────
-echo "[$(date -Iseconds)] Starting site refresh..."
+echo "[$(date -Iseconds)] Starting site refresh against ${REFRESH_URL}..."
 
 HTTP_CODE=$(curl -s -o /tmp/refresh-response.json -w "%{http_code}" \
-    -X POST "${API_URL}/api/functions/refresh-sites" \
+    -X POST "${REFRESH_URL}" \
     -H "Authorization: Bearer ${REFRESH_SECRET}" \
     -H "Content-Type: application/json")
 

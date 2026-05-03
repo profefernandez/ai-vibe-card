@@ -15,8 +15,6 @@ interface ExplorePanelProps {
   alwaysOpen?: boolean;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
 type FeedbackRating = "up" | "down";
 type FeedbackStatus = "idle" | "pending-comment" | "submitting" | "done";
 
@@ -67,14 +65,16 @@ async function postFeedback(payload: {
   feedback_token: string;
 }): Promise<void> {
   try {
-    await fetch(`${API_BASE}/feedback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // Routes through `db.functions.invoke()` so the SUPABASE_EDGE_FUNCTIONS
+    // allowlist sends us to the Supabase Edge Function when ported, and
+    // falls back to the legacy Express server otherwise. Fire-and-forget:
+    // a network error must not block the UI.
+    await db.functions.invoke("feedback", {
+      body: {
         ...payload,
         profile_id: payload.profile_id || undefined,
         conversation_id: payload.conversation_id || undefined,
-      }),
+      },
     });
   } catch { /* fire-and-forget */ }
 }

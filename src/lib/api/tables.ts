@@ -1,145 +1,63 @@
 /**
- * Generic table query builder. Mirrors a tiny subset of the Supabase JS client.
+ * `db.from(...)` — thin re-export of Supabase's PostgREST query builder.
+ *
+ * Previously this file shimmed Supabase's API on top of the Express
+ * `/api/tables/*` endpoints. Now that the data layer is Supabase, the shim is
+ * unnecessary: every caller in the codebase already uses the
+ * `from(...).select().eq().order().limit().single()/.maybeSingle()/
+ * .insert()/.update()/.delete()/.upsert()` chain, which is the native API.
+ *
+ * RLS policies (see `supabase/migrations/0002_rls_policies.sql`) are the
+ * security fence — these calls run as the signed-in browser user and the
+ * server enforces row ownership.
+ *
+ * Result shape compatibility:
+ *   - Supabase returns `{ data, error, count, status, statusText }`.
+ *   - All existing call sites only destructure `{ data, error }` (and
+ *     occasionally treat `error?.message` as a string), which `PostgrestError`
+ *     satisfies. So the swap is a drop-in.
  */
 
-import { apiFetch } from "./client";
+import { getSupabase } from "@/lib/supabase";
 
-export type DbResult<T> = { data: T | null; error: Error | null };
+/**
+ * Generic table query result. Kept as an exported type alias for
+ * backwards-compat with code that imports `DbResult` from this module.
+ *
+ * Note: Supabase's `error` is a `PostgrestError`, not a vanilla `Error`. Both
+ * have `.message: string`, which is the only field consumers in this repo
+ * touch, so we model this loosely as `{ message: string } | null` to keep the
+ * type permissive without leaking the supabase-js types into every caller.
+ */
+export type DbResult<T> = {
+    data: T | null;
+    error: { message: string } | null;
+};
 
-export class QueryBuilder<T = unknown> implements PromiseLike<DbResult<T[] | T | null>> {
-    private _table: string;
-    private _select = "*";
-    private _eqFilters: Array<[string, unknown]> = [];
-    private _orderCol: string | null = null;
-    private _orderAsc = true;
-    private _limitVal: number | null = null;
-    private _single = false;
-    private _maybeSingle = false;
-    private _insertData: unknown = null;
-    private _updateData: unknown = null;
-    private _deleteMode = false;
-    private _upsertData: unknown = null;
-    private _upsertConflict: string | null = null;
+/**
+ * Back-compat alias for the previous custom QueryBuilder class. Now points at
+ * Supabase's PostgREST builder. Imported as a *type* by any code that needs
+ * to annotate a builder return value.
+ */
+export type QueryBuilder<T = unknown> = ReturnType<
+    ReturnType<typeof getSupabase>["from"]
+> & {
+    /** Marker so callers can still parameterise on the row type. */
+    __row?: T;
+};
 
-    constructor(table: string) {
-        this._table = table;
-    }
+export const from = <T = unknown>(table: string): QueryBuilder<T> =>
+    getSupabase().from(table) as QueryBuilder<T>;
 
-    select(cols = "*"): this {
-        this._select = cols;
-        return this;
-    }
-
-    eq(col: string, val: unknown): this {
-        this._eqFilters.push([col, val]);
-        return this;
-    }
-
-    order(col: string, opts?: { ascending?: boolean }): this {
-        this._orderCol = col;
-        this._orderAsc = opts?.ascending !== false;
-        return this;
-    }
-
-    limit(n: number): this {
-        this._limitVal = n;
-        return this;
-    }
-
-    single(): this {
-        this._single = true;
-        return this;
-    }
-
-    maybeSingle(): this {
-        this._maybeSingle = true;
-        return this;
-    }
-
-    insert(data: unknown): this {
-        this._insertData = data;
-        return this;
-    }
-
-    update(data: unknown): this {
-        this._updateData = data;
-        return this;
-    }
-
-    delete(): this {
-        this._deleteMode = true;
-        return this;
-    }
-
-    upsert(data: unknown, opts?: { onConflict?: string }): this {
-        this._upsertData = data;
-        this._upsertConflict = opts?.onConflict ?? null;
-        return this;
-    }
-
-    then<TResult1 = DbResult<T[] | T | null>, TResult2 = never>(
-        onfulfilled?: ((value: DbResult<T[] | T | null>) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-    ): Promise<TResult1 | TResult2> {
-        return this._execute().then(onfulfilled, onrejected);
-    }
-
-    private async _execute(): Promise<DbResult<T[] | T | null>> {
-        try {
-            const params = new URLSearchParams();
-            if (this._select !== "*") params.set("select", this._select);
-            this._eqFilters.forEach(([col, val]) => params.append("filter", `${col}=eq.${val}`));
-            if (this._orderCol) {
-                params.set("order", `${this._orderCol}.${this._orderAsc ? "asc" : "desc"}`);
-            }
-            if (this._limitVal !== null) params.set("limit", String(this._limitVal));
-            const qs = params.toString() ? `?${params}` : "";
-            const basePath = `/tables/${this._table}`;
-
-            if (this._deleteMode) {
-                await apiFetch(`${basePath}${qs}`, { method: "DELETE" });
-                return { data: null, error: null };
-            }
-
-            if (this._upsertData !== null) {
-                const json = await apiFetch(`${basePath}/upsert`, {
-                    method: "POST",
-                    body: JSON.stringify({ data: this._upsertData, onConflict: this._upsertConflict }),
-                });
-                return { data: json as T, error: null };
-            }
-
-            if (this._updateData !== null) {
-                await apiFetch(`${basePath}${qs}`, {
-                    method: "PATCH",
-                    body: JSON.stringify(this._updateData),
-                });
-                return { data: null, error: null };
-            }
-
-            if (this._insertData !== null) {
-                const json = await apiFetch(basePath, {
-                    method: "POST",
-                    body: JSON.stringify(this._insertData),
-                });
-                if (this._single) {
-                    const row = Array.isArray(json) ? json[0] : json;
-                    return { data: row as T, error: null };
-                }
-                return { data: json as T[], error: null };
-            }
-
-            // SELECT
-            const json = await apiFetch(`${basePath}${qs}`);
-            if (this._single || this._maybeSingle) {
-                const row = Array.isArray(json) ? (json[0] ?? null) : json;
-                return { data: (row as T) ?? null, error: null };
-            }
-            return { data: (json as T[]) ?? [], error: null };
-        } catch (err) {
-            return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
-        }
-    }
-}
-
-export const from = <T = unknown>(table: string) => new QueryBuilder<T>(table);
+/**
+ * `db.rpc(name, args)` — thin pass-through to `supabase.rpc()`.
+ *
+ * Used by callers that need to invoke a Postgres function (typically a
+ * `SECURITY DEFINER` helper exposed via `GRANT EXECUTE` to anon /
+ * authenticated). Returns the same `{ data, error }` shape as `from()`.
+ */
+export const rpc = (
+    name: string,
+    args?: Record<string, unknown>,
+): ReturnType<ReturnType<typeof getSupabase>["rpc"]> =>
+    getSupabase().rpc(name, args);

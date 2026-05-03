@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Loader2, UserPlus, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiClient as db } from "@/lib/apiClient";
 import CardView from "@/components/card/CardView";
 import type { Profile } from "@/types";
 
@@ -28,72 +29,90 @@ const CardShare = () => {
 
     useEffect(() => {
         if (!slug) return;
-        fetch(`${import.meta.env.VITE_API_URL || "/api"}/card/${encodeURIComponent(slug)}`)
-            .then(async (res) => {
-                if (!res.ok) { setNotFound(true); return; }
-                const data: CardApiResponse = await res.json();
-                setProfile({
-                    display_name: data.display_name || "",
-                    tagline: data.tagline || "",
-                    bio: data.bio || "",
-                    avatar_url: data.avatar_url || "",
-                    cta_url: data.cta_url || "",
-                    cta_label: data.cta_label || "Get in Touch",
-                    cta_embed: data.cta_embed || "",
-                    social_links: Array.isArray(data.social_links) ? data.social_links : [],
-                    card_layout: data.card_layout === "bold" ? "bold" : "classic",
-                    theme: data.theme || "dark",
-                    accent_color: data.accent_color || "amber",
-                    seo_title: data.seo_title || "",
-                    seo_description: data.seo_description || "",
-                    og_image_url: data.og_image_url || "",
-                    twitter_handle: data.twitter_handle || "",
-                    robots_txt: (data as any).robots_txt,
-                    slug: data.slug || "",
-                    ai_query_enabled: !!data.ai_query_enabled,
-                    show_qr_scan_link: !!(data as any).show_qr_scan_link,
-                    services: Array.isArray((data as any).services) ? (data as any).services : [],
-                });
-                setProfileId(data.user_id ?? null);
-                setSiteId(data.site_id ?? null);
-            })
-            .catch(() => setNotFound(true))
-            .finally(() => setLoading(false));
+        let cancelled = false;
+        (async () => {
+            // `get_card_by_slug` returns a TABLE row — chain `.maybeSingle()`
+            // so supabase-js unwraps it into `data` (or `null`) for us.
+            const builder = db.rpc("get_card_by_slug", { p_slug: slug }) as unknown as {
+                maybeSingle: () => Promise<{ data: CardApiResponse | null; error: { message: string } | null }>;
+            };
+            const { data: row, error } = await builder.maybeSingle();
+            if (cancelled) return;
+            if (error || !row) {
+                setNotFound(true);
+                setLoading(false);
+                return;
+            }
+            setProfile({
+                display_name: row.display_name || "",
+                tagline: row.tagline || "",
+                bio: row.bio || "",
+                avatar_url: row.avatar_url || "",
+                cta_url: row.cta_url || "",
+                cta_label: row.cta_label || "Get in Touch",
+                cta_embed: row.cta_embed || "",
+                social_links: Array.isArray(row.social_links) ? row.social_links : [],
+                card_layout: row.card_layout === "bold" ? "bold" : "classic",
+                theme: row.theme || "dark",
+                accent_color: row.accent_color || "amber",
+                seo_title: row.seo_title || "",
+                seo_description: row.seo_description || "",
+                og_image_url: row.og_image_url || "",
+                twitter_handle: row.twitter_handle || "",
+                robots_txt: (row as { robots_txt?: unknown }).robots_txt as Profile["robots_txt"],
+                slug: row.slug || "",
+                ai_query_enabled: !!row.ai_query_enabled,
+                show_qr_scan_link: !!(row as { show_qr_scan_link?: boolean }).show_qr_scan_link,
+                services: Array.isArray((row as { services?: unknown }).services)
+                    ? ((row as { services?: Profile["services"] }).services ?? [])
+                    : [],
+            });
+            setProfileId(row.user_id ?? null);
+            setSiteId(row.site_id ?? null);
+            setLoading(false);
+        })().catch(() => {
+            if (!cancelled) {
+                setNotFound(true);
+                setLoading(false);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
     }, [slug]);
 
     const handleConnect = async () => {
         if (!user || !slug) return;
         setConnectState("sending");
-        try {
-            const session = JSON.parse(localStorage.getItem("vps_session") || "null");
-            const res = await fetch(
-                `${import.meta.env.VITE_API_URL || "/api"}/card/${encodeURIComponent(slug)}/connect`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
-                    },
-                    body: JSON.stringify({ message }),
-                },
-            );
-            if (res.ok) {
-                setConnectState("sent");
-                toast({ title: "Connection request sent!" });
-            } else {
-                const data = await res.json();
-                if (res.status === 409) {
-                    setConnectState("already");
-                    toast({ title: data.error || "Already connected" });
-                } else {
-                    setConnectState("error");
-                    toast({ title: data.error || "Failed to connect", variant: "destructive" });
-                }
-            }
-        } catch {
-            setConnectState("error");
-            toast({ title: "Network error", variant: "destructive" });
+        const { data, error } = await db.functions.invoke("connection-request", {
+            body: { slug, message },
+        });
+        if (!error) {
+            setConnectState("sent");
+            toast({ title: "Connection request sent!" });
+            return;
         }
+        // Edge Function returns the server JSON in `error.context` for non-2xx;
+        // fall back to a generic message if we can't read it.
+        const ctx = (error as { context?: Response }).context;
+        let serverMsg: string | undefined;
+        let status: number | undefined;
+        if (ctx && typeof ctx.json === "function") {
+            try {
+                const parsed = (await ctx.json()) as { error?: string };
+                serverMsg = parsed.error;
+                status = ctx.status;
+            } catch { /* ignore */ }
+        }
+        if (status === 409) {
+            setConnectState("already");
+            toast({ title: serverMsg || "Already connected" });
+        } else {
+            setConnectState("error");
+            toast({ title: serverMsg || error.message || "Failed to connect", variant: "destructive" });
+        }
+        // Suppress unused-warning when no server JSON was readable.
+        void data;
     };
 
     if (loading) {
