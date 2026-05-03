@@ -94,9 +94,24 @@ auto-populated by the Edge runtime — don't set them manually.
 ### Ported so far
 - `test-api-connection` — validates a stored AI provider key. Replaces
   `api/routes/test-api-connection.ts`.
+- `lemonade-chat` — visitor chat for a public card. Replaces
+  `api/routes/lemonade-chat.ts`. **Public endpoint — must be deployed
+  with `--no-verify-jwt`** so anonymous visitors can reach it. Required
+  secrets: `LEMONADE_API_KEY`, `LEMONADE_CHAT_ID`,
+  `LEMONADE_SECURITY_ID` (optional, enables the security pre-screen),
+  `FEEDBACK_HMAC_SECRET` (must match the legacy `/api/feedback` server
+  while feedback verification still lives there), `ENCRYPTION_KEY`.
+
+  ```bash
+  supabase functions deploy lemonade-chat --no-verify-jwt
+  ```
+
+  Schema note: the Supabase BYOK lookup joins `api_connections` to
+  `sites` on `user_id` (single-tenant — no `organization_id` column),
+  unlike the legacy Express handler.
 
 ### Still on the legacy server
-- `lemonade-chat`, `scrape-site`, `verify-domain`, `query-content`,
-  `refresh-sites`, `prune-logs`, `card`, `feedback`. These will be ported
-  in subsequent phases; the front-end shim continues to route them to the
-  Express server in the meantime.
+- `scrape-site`, `verify-domain`, `query-content`, `refresh-sites`,
+  `prune-logs`, `card`, `feedback`. These will be ported in subsequent
+  phases; the front-end shim continues to route them to the Express
+  server in the meantime.

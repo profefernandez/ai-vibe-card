@@ -71,3 +71,26 @@ export async function requireUser(req: Request): Promise<AuthedRequest | Respons
 
     return { user: data.user, userClient, serviceClient };
 }
+
+/**
+ * For PUBLIC endpoints (no JWT): build just a service-role client.
+ * The function must be deployed with `--no-verify-jwt` so anonymous
+ * visitors can reach it. Callers are responsible for any rate limiting
+ * and for treating all input as untrusted.
+ */
+export function getServiceClient(): SupabaseClient | Response {
+    const url = Deno.env.get("SUPABASE_URL");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !serviceKey) {
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: "Edge function is not configured.",
+            }),
+            { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+    }
+    return createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+    });
+}

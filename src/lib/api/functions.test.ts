@@ -53,16 +53,16 @@ describe("functions.invoke routing", () => {
         const functions = await load(invoke);
         apiFetchMock.mockResolvedValue({ ok: true });
 
-        const { data, error } = await functions.invoke("lemonade-chat", {
-            body: { message: "hi" },
+        const { data, error } = await functions.invoke("scrape-site", {
+            body: { url: "https://example.com" },
         });
 
         expect(error).toBeNull();
         expect(data).toEqual({ ok: true });
         expect(invoke).not.toHaveBeenCalled();
-        expect(apiFetchMock).toHaveBeenCalledWith("/functions/lemonade-chat", {
+        expect(apiFetchMock).toHaveBeenCalledWith("/functions/scrape-site", {
             method: "POST",
-            body: JSON.stringify({ message: "hi" }),
+            body: JSON.stringify({ url: "https://example.com" }),
         });
     });
 
@@ -84,7 +84,7 @@ describe("functions.invoke routing", () => {
         const functions = await load(invoke);
         apiFetchMock.mockRejectedValue(new Error("network down"));
 
-        const { error } = await functions.invoke("scrape-site", { body: {} });
+        const { error } = await functions.invoke("verify-domain", { body: {} });
 
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toBe("network down");
