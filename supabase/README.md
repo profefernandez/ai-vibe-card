@@ -142,8 +142,34 @@ auto-populated by the Edge runtime — don't set them manually.
   re-validation. DNS TXT lookups go through the same DoH endpoint
   (`dnsTxt()` in `_shared/safe-fetch.ts`).
 
+- `scrape-site` — crawls a verified domain through Firecrawl and replaces
+  the site's `site_pages` + `content_blocks` rows. Replaces
+  `api/routes/scrape-site.ts`. Authenticated endpoint.
+
+  ```bash
+  supabase secrets set FIRECRAWL_API_KEY=<key>
+  supabase functions deploy scrape-site
+  ```
+
+  Notes:
+  - Refuses unverified sites (same `Domain must be verified before
+    scraping` response as the legacy handler) and runs every read/write
+    through the user-bound RLS client (owner has `FOR ALL` policies on
+    `sites` / `site_pages` / `content_blocks`).
+  - Calls `assertPublicHost()` on the URL before handing it to Firecrawl
+    so the verification flow can't be weaponised for internal recon —
+    Firecrawl crawls from their own infra but rejecting an obviously
+    private hostname here is still defence in depth.
+  - Crawl budget: 30 polls × 2 s = 60 s; sits inside the 150 s Edge
+    Function wall clock. If you raise `CRAWL_LIMIT` above 20 pages,
+    raise the budget too (or move the function to background-task
+    mode).
+  - HTML/markdown is run through the shared `sanitizeContent()` helper
+    before insertion; the regex set is byte-identical to
+    `api/lib/sanitize-content.ts` so re-scraping a row that the legacy
+    server already cleaned is idempotent.
+
 ### Still on the legacy server
-- `scrape-site`, `query-content`, `refresh-sites`,
-  `prune-logs`, `card`. These will be ported in subsequent phases; the
-  front-end shim continues to route them to the Express server in the
-  meantime.
+- `query-content`, `refresh-sites`, `prune-logs`, `card`. These will be
+  ported in subsequent phases; the front-end shim continues to route
+  them to the Express server in the meantime.

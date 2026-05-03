@@ -24,6 +24,7 @@ export const SUPABASE_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
     "lemonade-chat",
     "feedback",
     "verify-domain",
+    "scrape-site",
 ]);
 
 export const functions = {
